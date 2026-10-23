@@ -76,9 +76,11 @@ We intend to continue improving the project as we gain more experience in game d
 
 ## Authors
 
-**Tasnim Islam**  
+**Tasnim Islam** 
+GITHUB : https://github.com/25tasnimislam
 
 **Evan Nirjon**  
+GITHUB : https://github.com/evannirjon
 
 
 This project was collaboratively developed by Tasnim Islam and Evan Nirjon as part of our learning experience in C++ programming and game development with Raylib.
