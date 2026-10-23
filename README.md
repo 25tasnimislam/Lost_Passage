@@ -86,3 +86,52 @@ This project was collaboratively developed by Tasnim Islam and Evan Nirjon as pa
 ## License
 
 No license has been specified for this repository yet. Until a license is added, the project remains subject to the default copyright protections. If you intend to allow others to use, modify, or distribute the code, consider adding an appropriate open-source license.
+
+## Dependencies and Development Environment
+
+The Lost Passage was developed using C++ and Raylib on Windows. The development environment includes MSYS2 UCRT64, MinGW-w64 GCC, and Visual Studio Code.
+
+### Required Tools
+
+- **C++ Compiler (GCC):** Provided through MSYS2.
+- **Raylib 5.0:** The graphics library used for the game.
+- **Visual Studio Code:** The code editor used during development.
+
+### Official Download Links
+
+- **MSYS2:** https://www.msys2.org/
+- **Raylib:** https://www.raylib.com/
+- **Raylib Releases:** https://github.com/raysan5/raylib/releases
+- **Visual Studio Code:** https://code.visualstudio.com/
+- **GCC Documentation:** https://gcc.gnu.org/onlinedocs/
+
+### Setting Up the Compiler
+
+Install MSYS2 from its official website. Open the MSYS2 UCRT64 terminal and install the GCC compiler by running:
+
+```bash
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc
+```
+
+Verify the installation:
+
+```bash
+g++ --version
+g++ -dumpmachine
+```
+
+The expected compiler target is `x86_64-w64-mingw32`.
+
+### Setting Up Raylib
+
+Download Raylib from the official website or its GitHub releases page. Make sure the Raylib package is compatible with the installed compiler and target architecture.
+
+Configure the Raylib include and library paths according to your local development environment before compiling the game.
+
+### Building and Running the Project
+
+Open the project directory in the MSYS2 UCRT64 terminal. Compile the C++ source file using a compatible Raylib library and the appropriate include and library paths.
+
+After successful compilation, run the generated executable to launch the game.
+
+**Note:** The compilation command and file paths may need to be adjusted for your local setup. This project was developed in a Windows environment using MSYS2 UCRT64 and Raylib 5.0.
