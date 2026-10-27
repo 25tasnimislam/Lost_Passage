@@ -137,3 +137,29 @@ Open the project directory in the MSYS2 UCRT64 terminal. Compile the C++ source 
 After successful compilation, run the generated executable to launch the game.
 
 **Note:** The compilation command and file paths may need to be adjusted for your local setup. This project was developed in a Windows environment using MSYS2 UCRT64 and Raylib 5.0.
+
+
+## Controls and Input System
+
+The spaceship control system supports both keyboard and mouse input, allowing for smooth and responsive gameplay. Players can combine both input methods for a more flexible control experience.
+
+### Movement and Steering
+
+- **W, A, S, D / Arrow Keys:** Apply directional thrust to move the spaceship.
+- **Mouse Movement:** The spaceship smoothly rotates and moves toward the cursor position.
+- **Left Mouse Button (LMB):** Enables cursor-directed spaceship movement.
+
+Mouse-based movement converts the cursor's screen position into world coordinates to support accurate navigation within the game environment.
+
+### Sprint and Boost
+
+- **Left Shift / Right Mouse Button (RMB):** Hold either input to activate the spaceship's boost.
+
+### Kinetic Shield
+
+- **E / Middle Mouse Button (MMB):** Activate the kinetic shield using either input.
+
+### Additional Systems
+
+- **Q:** Activate nanite repair sparks.
+- **Spacebar:** Trigger a Beyond Visual Range (BVR) radar ping.
