@@ -1,28 +1,14 @@
 /*******************************************************************************************
 *
-*   THE LOST PASSAGE - 2D Procedural Cavern Jet Runner with Raylib (C++17)
+*   THE LOST PASSAGE: VOID RUNNER - Enhanced Jet & Leviathan Engine (Raylib C++17)
 *
-*   Features:
-*     - Player Shape: Supersonic Delta-Wing Jet Fighter with twin afterburners & cockpit
-*     - Enemy Shapes: Guided Cruise Missiles with smoke trails, Aerial Bombs, Proximity Spiky Mines
-*     - Life Pickups: Floating Red Hearts that restore Hull Integrity (+30 HP)
-*     - Full Menu System with easy return [M] Key after finishing / Game Over
-*     - 4 Hardness Difficulty Levels:
-*         [1] CADET (Recon - Wide caverns, gentle hazards, 160 HP, 90s timer)
-*         [2] COMMANDER (Tactical - Standard hazards & traps, 100 HP, 60s timer)
-*         [3] VOID WALKER (Hardcore - Narrow chokepoints, high speed missiles, 70 HP, 45s timer)
-*         [4] APOCALYPSE (Insane - Swarms of homing missiles & cluster bombs, 50 HP, 35s timer)
-*     - Clean, High-Contrast Typography with dark backing plates for ultra-clear readability
-*     - Procedural audio sound effects synthesized directly in code (no external assets needed)
-*
-*   Compile on Windows (cmd.exe / MinGW / w64devkit):
-*     g++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -lopengl32 -lgdi32 -lwinmm -o lost_passage.exe
-*
-*   Compile on Linux:
-*     g++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -o lost_passage
-*
-*   Compile on macOS:
-*     clang++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -o lost_passage
+*   Updates:
+*     - Stylized Sci-Fi Interceptor Spaceship with dual nacelles, panel lining & plasma cores
+*     - Monster Pursuit: Terrifying "Void Leviathan" chases the player from the rear;
+*       hold SHIFT / RMB to boost and escape its lethal jaws!
+*     - Hybrid Controls: Seamlessly steer with WASD/Arrows OR Mouse Position/LMB Drag
+*     - Procedural Dynamic Ambient Sci-Fi BGM streamed directly in real-time
+*     - Preserved all original features: Hearts, Crystals, Missiles, Traps, HUD & Menus
 *
 ********************************************************************************************/
 
@@ -136,13 +122,26 @@ struct EnemyHazard {
     std::string signatureName;
 };
 
+// Void Leviathan Monster Pursuit
+struct LeviathanMonster {
+    Vector2 position;
+    Vector2 velocity;
+    float radius;
+    bool active;
+    bool pursuing;
+    float spawnTimer;
+    float roarTimer;
+    float jawAnim;
+    std::vector<Vector2> tailSegments;
+};
+
 struct PlayerJet {
     Vector2 position;
     Vector2 velocity;
     float angle;
     float radius;
 
-    // Strategic Vital Stats
+    // Vital Stats
     float hull;
     float maxHull;
     float energy;
@@ -178,7 +177,7 @@ struct LeaderboardEntry {
 };
 
 // ---------------------------------------------------------
-// Procedural Synthetic Audio (No external WAV required!)
+// Procedural Synthetic Audio & Ambient Sci-Fi BGM
 // ---------------------------------------------------------
 class AudioSynthesizer {
 public:
@@ -190,6 +189,11 @@ public:
     Sound sndPing;
     Sound sndAlarm;
     Sound sndRepair;
+    Sound sndRoar;
+
+    AudioStream bgmStream;
+    float bgmTime;
+    bool bgmPlaying;
 
     void Init() {
         InitAudioDevice();
@@ -197,13 +201,69 @@ public:
         sndShield  = GenerateTone(350, 480, 0.30f, 0.30f, 0);
         sndHit     = GenerateNoise(0.28f, 0.45f);
         sndCrystal = GenerateTone(880, 1320, 0.20f, 0.25f, 0);
-        sndHeart   = GenerateTone(520, 1040, 0.30f, 0.30f, 0); // Joyous ascending chord
+        sndHeart   = GenerateTone(520, 1040, 0.30f, 0.30f, 0);
         sndPing    = GenerateTone(600, 950, 0.40f, 0.30f, 0);
         sndAlarm   = GenerateTone(440, 330, 0.15f, 0.35f, 2);
         sndRepair  = GenerateTone(520, 680, 0.35f, 0.25f, 0);
+        sndRoar    = GenerateMonsterRoar(0.9f, 0.55f);
+
+        // Ambient Procedural BGM Stream
+        bgmTime = 0.0f;
+        bgmPlaying = false;
+        SetAudioStreamBufferSizeDefault(4096);
+        bgmStream = LoadAudioStream(44100, 16, 1);
+        PlayAudioStream(bgmStream);
+        bgmPlaying = true;
+    }
+
+    void UpdateBGM(bool inGame, float threatIntensity) {
+        if (!bgmPlaying || !IsAudioStreamProcessed(bgmStream)) return;
+
+        const int sampleCount = 4096;
+        short buffer[sampleCount];
+        float sampleRate = 44100.0f;
+
+        // Space Synthesizer chords & arps
+        static const float baseNotes[4] = { 110.0f, 130.81f, 164.81f, 196.0f }; // A2, C3, E3, G3
+
+        for (int i = 0; i < sampleCount; ++i) {
+            bgmTime += 1.0f / sampleRate;
+
+            if (!inGame) {
+                // Chill title drone
+                float drone = sinf(2.0f * PI * 55.0f * bgmTime) * 0.15f;
+                drone += sinf(2.0f * PI * 110.0f * bgmTime) * 0.08f;
+                buffer[i] = (short)(drone * 32767.0f * 0.25f);
+                continue;
+            }
+
+            // Progression chord selection every 2 seconds
+            int chordIdx = ((int)(bgmTime * 0.5f)) % 4;
+            float rootFreq = baseNotes[chordIdx];
+
+            // 16th-note fast synth sequence
+            int step = ((int)(bgmTime * 8.0f)) % 8;
+            float arpMult = (step == 0 || step == 4) ? 1.0f : (step == 2 || step == 6) ? 1.5f : (step == 7) ? 2.0f : 1.25f;
+            float arpFreq = rootFreq * arpMult;
+
+            float bassTone = sinf(2.0f * PI * (rootFreq * 0.5f) * bgmTime);
+            float arpTone = fmodf(bgmTime * arpFreq, 1.0f) * 2.0f - 1.0f; // Warm sawtooth
+
+            // Low-pass filter approximation & pulsation
+            float pulse = 0.5f + 0.5f * sinf(bgmTime * 4.0f);
+            float monsterTension = threatIntensity * 0.35f * sinf(2.0f * PI * 44.0f * bgmTime);
+
+            float mix = (bassTone * 0.25f) + (arpTone * 0.12f * pulse) + monsterTension;
+            mix = Clamp(mix, -1.0f, 1.0f);
+
+            buffer[i] = (short)(mix * 32767.0f * 0.28f);
+        }
+
+        UpdateAudioStream(bgmStream, buffer, sampleCount);
     }
 
     void Close() {
+        UnloadAudioStream(bgmStream);
         UnloadSound(sndBoost);
         UnloadSound(sndShield);
         UnloadSound(sndHit);
@@ -212,6 +272,7 @@ public:
         UnloadSound(sndPing);
         UnloadSound(sndAlarm);
         UnloadSound(sndRepair);
+        UnloadSound(sndRoar);
         CloseAudioDevice();
     }
 
@@ -227,11 +288,11 @@ private:
             float timeSec = (float)i / sampleRate;
             float sampleVal = 0.0f;
 
-            if (waveType == 0) { // Sine
+            if (waveType == 0) {
                 sampleVal = sinf(2.0f * PI * freq * timeSec);
-            } else if (waveType == 1) { // Triangle / Saw
+            } else if (waveType == 1) {
                 sampleVal = fmodf(freq * timeSec, 1.0f) * 2.0f - 1.0f;
-            } else { // Square
+            } else {
                 sampleVal = (sinf(2.0f * PI * freq * timeSec) > 0.0f) ? 0.7f : -0.7f;
             }
 
@@ -274,6 +335,33 @@ private:
         UnloadWave(wave);
         return s;
     }
+
+    Sound GenerateMonsterRoar(float duration, float volume) {
+        int sampleRate = 44100;
+        int sampleCount = (int)(sampleRate * duration);
+        short *data = (short *)malloc(sampleCount * sizeof(short));
+
+        for (int i = 0; i < sampleCount; ++i) {
+            float t = (float)i / sampleCount;
+            float timeSec = (float)i / sampleRate;
+            float pitch = 140.0f * expf(-t * 1.8f) + 40.0f;
+            float rawGrowl = sinf(2.0f * PI * pitch * timeSec) + 0.6f * sinf(2.0f * PI * (pitch * 0.5f) * timeSec);
+            float noise = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * 0.45f;
+            float envelope = sinf(t * PI);
+            data[i] = (short)((rawGrowl + noise) * envelope * volume * 32767.0f);
+        }
+
+        Wave wave{};
+        wave.frameCount = (unsigned int)sampleCount;
+        wave.sampleRate = (unsigned int)sampleRate;
+        wave.sampleSize = 16;
+        wave.channels = 1;
+        wave.data = data;
+
+        Sound s = LoadSoundFromWave(wave);
+        UnloadWave(wave);
+        return s;
+    }
 };
 
 // ---------------------------------------------------------
@@ -284,6 +372,7 @@ public:
     GameState state;
     Difficulty difficulty;
     PlayerJet player;
+    LeviathanMonster monster;
     Camera2D camera;
 
     std::vector<PassageSlice> passage;
@@ -315,7 +404,7 @@ public:
     }
 
     void Init() {
-        InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Lost Passage - Cavern Jet Flight Engine");
+        InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Lost Passage: Void Runner - Cavern Spaceship Engine");
         SetTargetFPS(60);
 
         audio.Init();
@@ -356,7 +445,7 @@ public:
         player.position = { 200.0f, (float)SCREEN_HEIGHT / 2.0f };
         player.velocity = { 0.0f, 0.0f };
         player.angle = 0.0f;
-        player.radius = 18.0f;
+        player.radius = 20.0f;
         player.maxHull = maxH;
         player.hull = maxH;
         player.maxEnergy = 100.0f;
@@ -366,7 +455,7 @@ public:
         player.boosting = false;
         player.damageControlActive = false;
         player.damageControlTimer = 0.0f;
-        player.visionRadius = 250.0f;
+        player.visionRadius = 260.0f;
         player.radarPingRadius = 0.0f;
         player.radarPingActive = false;
         player.radarPingAlpha = 0.0f;
@@ -375,6 +464,20 @@ public:
         player.heartsCollected = 0;
         player.trapsEvaded = 0;
         player.currentSector = 1;
+
+        // Reset Leviathan Monster
+        monster.active = true;
+        monster.pursuing = false;
+        monster.position = { -600.0f, (float)SCREEN_HEIGHT / 2.0f };
+        monster.velocity = { 0.0f, 0.0f };
+        monster.radius = 38.0f;
+        monster.spawnTimer = 8.0f; // First arrival after 8 seconds of flight
+        monster.roarTimer = 0.0f;
+        monster.jawAnim = 0.0f;
+        monster.tailSegments.clear();
+        for (int i = 0; i < 9; ++i) {
+            monster.tailSegments.push_back(monster.position);
+        }
 
         timeRemaining = baseTime;
         totalElapsedTime = 0.0f;
@@ -414,7 +517,6 @@ public:
         for (int i = 0; i < totalSlices; ++i) {
             float x = i * sliceStep;
 
-            // Multi-frequency harmonic curves for natural subterranean passages
             float wave1 = sinf(x * 0.0018f) * 160.0f;
             float wave2 = cosf(x * 0.0045f) * 75.0f;
             float wave3 = sinf(x * 0.0090f) * 35.0f;
@@ -428,7 +530,7 @@ public:
             PassageSlice slice = { x, centerY, halfWidth };
             passage.push_back(slice);
 
-            // Populate Traps every ~250px after initial safe zone (x > 600px)
+            // Traps
             if (x > 600.0f && (i % 12 == 0)) {
                 int trapChoice = rand() % 4;
                 Trap t;
@@ -439,14 +541,12 @@ public:
                 t.velocity = { 0.0f, 0.0f };
 
                 if (trapChoice == 0) {
-                    // Falling Stalactite attached to ceiling
                     t.type = TrapType::STALACTITE_FALLING;
                     t.position = { x, slice.ceilingY() + 15.0f };
                     t.originalPos = t.position;
                     t.radius = 18.0f;
                     t.alertDistance = 180.0f;
                 } else if (trapChoice == 1) {
-                    // Proximity Spiky Mine
                     t.type = TrapType::PROXIMITY_MINE;
                     float yOffset = ((float)rand() / RAND_MAX - 0.5f) * (halfWidth * 0.9f);
                     t.position = { x, centerY + yOffset };
@@ -454,14 +554,12 @@ public:
                     t.radius = 17.0f;
                     t.alertDistance = 150.0f;
                 } else if (trapChoice == 2) {
-                    // Laser Tripwire oscillating between floor and ceiling
                     t.type = TrapType::LASER_TRIPWIRE;
                     t.position = { x, centerY };
                     t.originalPos = t.position;
                     t.radius = halfWidth;
                     t.alertDistance = 220.0f;
                 } else {
-                    // Hydraulic crusher gate
                     t.type = TrapType::CRUSHER_GATE;
                     t.position = { x, centerY };
                     t.originalPos = t.position;
@@ -471,7 +569,7 @@ public:
                 traps.push_back(t);
             }
 
-            // Populate Chrono-Crystals (+5s Time Extension)
+            // Chrono-Crystals
             if (x > 400.0f && (i % 9 == 0)) {
                 ChronoCrystal c;
                 float yOffset = ((float)rand() / RAND_MAX - 0.5f) * (halfWidth * 0.7f);
@@ -482,7 +580,7 @@ public:
                 crystals.push_back(c);
             }
 
-            // Life (Hearts) Pickups (+30 HP Recovery) scattered along the passage
+            // Life (Hearts) Pickups
             if (x > 500.0f && (i % 16 == 5)) {
                 HeartPickup hp;
                 float yOffset = ((float)rand() / RAND_MAX - 0.5f) * (halfWidth * 0.65f);
@@ -515,21 +613,18 @@ public:
         if (difficulty == Difficulty::APOCALYPSE) baseSpeed = 520.0f;
 
         if (choice == 0) {
-            // Cruise Missile: fast, straight, high kinetic damage
             h.type = HazardType::CRUISE_MISSILE;
             h.velocity = { -baseSpeed * 1.25f, ((float)rand() / RAND_MAX - 0.5f) * 40.0f };
             h.radius = 16.0f;
             h.threatLevel = 4.0f;
             h.signatureName = "CRUISE-MISSILE";
         } else if (choice == 1) {
-            // Heavy Bomb: slower, massive blast radius
             h.type = HazardType::HEAVY_BOMB;
-            h.velocity = { -baseSpeed * 0.85f, 50.0f }; // arcs downward
+            h.velocity = { -baseSpeed * 0.85f, 50.0f };
             h.radius = 20.0f;
             h.threatLevel = 5.0f;
             h.signatureName = "HEAVY-BOMB";
         } else {
-            // Seeker Drone: drifts toward jet altitude
             h.type = HazardType::SEEKER_DRONE;
             h.velocity = { -baseSpeed, 0.0f };
             h.radius = 18.0f;
@@ -553,14 +648,21 @@ public:
     }
 
     void Update(float dt) {
-        // Return to Menu from anywhere via [M] Key
+        // Dynamic procedural background music update
+        float leviathanCloseness = 0.0f;
+        if (state == GameState::PLAYING && monster.pursuing) {
+            float dist = Vector2Distance(player.position, monster.position);
+            leviathanCloseness = Clamp(1.0f - (dist / 900.0f), 0.0f, 1.0f);
+        }
+        audio.UpdateBGM(state == GameState::PLAYING, leviathanCloseness);
+
         if (IsKeyPressed(KEY_M)) {
             state = GameState::TITLE_MENU;
             return;
         }
 
         if (state == GameState::TITLE_MENU) {
-            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 ResetGame();
                 state = GameState::PLAYING;
             }
@@ -579,7 +681,7 @@ public:
         }
 
         if (state == GameState::GAME_OVER || state == GameState::SECTOR_CLEARED) {
-            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_R)) {
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_R) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 ResetGame();
                 state = GameState::PLAYING;
             }
@@ -591,9 +693,6 @@ public:
             return;
         }
 
-        // -----------------------------------------------------
-        // Player Input & Physics
-        // -----------------------------------------------------
         totalElapsedTime += dt;
         timeRemaining -= dt;
         if (timeRemaining <= 0.0f) {
@@ -602,34 +701,53 @@ public:
             return;
         }
 
+        // -----------------------------------------------------
+        // Hybrid Controls: Keyboard + Mouse Input
+        // -----------------------------------------------------
         Vector2 inputDir = { 0.0f, 0.0f };
-        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) inputDir.x += 1.0f;
-        if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) inputDir.x -= 0.6f;
-        if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) inputDir.y -= 1.0f;
-        if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) inputDir.y += 1.0f;
+        bool hasKeyboardInput = false;
 
-        // Speed Booster / Afterburners (Shift / Space / Boost)
-        float baseSpeed = 270.0f;
+        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { inputDir.x += 1.0f; hasKeyboardInput = true; }
+        if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) { inputDir.x -= 0.6f; hasKeyboardInput = true; }
+        if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) { inputDir.y -= 1.0f; hasKeyboardInput = true; }
+        if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) { inputDir.y += 1.0f; hasKeyboardInput = true; }
+
+        // Mouse Steering: Convert cursor to world coordinates
+        Vector2 mouseWorld = GetScreenToWorld2D(GetMousePosition(), camera);
+        Vector2 toMouse = Vector2Subtract(mouseWorld, player.position);
+        float mouseDistance = Vector2Length(toMouse);
+
+        if (!hasKeyboardInput && (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || mouseDistance > 35.0f)) {
+            Vector2 mouseNorm = Vector2Normalize(toMouse);
+            // Bias propulsion forward naturally while following cursor vector
+            inputDir.x = Clamp(mouseNorm.x + 0.4f, -0.6f, 1.0f);
+            inputDir.y = mouseNorm.y;
+        }
+
+        // Boost/Sprint: Left Shift OR Right Mouse Button
+        bool boostRequested = (IsKeyDown(KEY_LEFT_SHIFT) || IsMouseButtonDown(MOUSE_BUTTON_RIGHT));
+        float baseSpeed = 280.0f;
         player.boosting = false;
-        if (IsKeyDown(KEY_LEFT_SHIFT) && player.energy > 5.0f) {
-            baseSpeed = 500.0f;
-            player.energy -= 22.0f * dt;
+
+        if (boostRequested && player.energy > 5.0f) {
+            baseSpeed = 540.0f;
+            player.energy -= 24.0f * dt;
             player.boosting = true;
 
-            // Twin afterburner flame trail
-            Vector2 flameOffset1 = Vector2{ cosf(player.angle) * 20.0f + sinf(player.angle) * 7.0f, sinf(player.angle) * 20.0f - cosf(player.angle) * 7.0f };
-            Vector2 flameOffset2 = Vector2{ cosf(player.angle) * 20.0f - sinf(player.angle) * 7.0f, sinf(player.angle) * 20.0f + cosf(player.angle) * 7.0f };
-            Vector2 flamePos1 = Vector2Subtract(player.position, flameOffset1);
-            Vector2 flamePos2 = Vector2Subtract(player.position, flameOffset2);
+            // Spaceship engine exhausts
+            Vector2 exhaustOffset1 = Vector2{ cosf(player.angle) * 24.0f + sinf(player.angle) * 11.0f, sinf(player.angle) * 24.0f - cosf(player.angle) * 11.0f };
+            Vector2 exhaustOffset2 = Vector2{ cosf(player.angle) * 24.0f - sinf(player.angle) * 11.0f, sinf(player.angle) * 24.0f + cosf(player.angle) * 11.0f };
+            Vector2 flamePos1 = Vector2Subtract(player.position, exhaustOffset1);
+            Vector2 flamePos2 = Vector2Subtract(player.position, exhaustOffset2);
 
-            SpawnParticle(flamePos1, Vector2{ -cosf(player.angle) * 220.0f + (float)(rand() % 50 - 25), -sinf(player.angle) * 220.0f + (float)(rand() % 50 - 25) }, Color{ 0, 220, 255, 255 }, 4.5f, 0.35f);
-            SpawnParticle(flamePos2, Vector2{ -cosf(player.angle) * 220.0f + (float)(rand() % 50 - 25), -sinf(player.angle) * 220.0f + (float)(rand() % 50 - 25) }, Color{ 255, 140, 20, 255 }, 4.5f, 0.35f);
+            SpawnParticle(flamePos1, Vector2{ -cosf(player.angle) * 260.0f + (float)(rand() % 60 - 30), -sinf(player.angle) * 260.0f + (float)(rand() % 60 - 30) }, Color{ 0, 240, 255, 255 }, 5.0f, 0.35f);
+            SpawnParticle(flamePos2, Vector2{ -cosf(player.angle) * 260.0f + (float)(rand() % 60 - 30), -sinf(player.angle) * 260.0f + (float)(rand() % 60 - 30) }, Color{ 255, 140, 30, 255 }, 5.0f, 0.35f);
 
             if (!IsSoundPlaying(audio.sndBoost)) PlaySound(audio.sndBoost);
         }
 
-        // Kinetic Shield Toggle (E key)
-        if (IsKeyDown(KEY_E) && player.energy > 8.0f) {
+        // Shield: [E] or Middle Mouse Button
+        if ((IsKeyDown(KEY_E) || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) && player.energy > 8.0f) {
             player.shieldActive = true;
             player.energy -= 18.0f * dt;
         } else {
@@ -643,7 +761,6 @@ public:
             player.hull = fminf(player.maxHull, player.hull + 18.0f * dt);
             player.damageControlTimer += dt;
 
-            // Nanite green healing sparks
             SpawnParticle(
                 Vector2{ player.position.x + (float)(rand() % 28 - 14), player.position.y + (float)(rand() % 28 - 14) },
                 Vector2{ 0.0f, -40.0f },
@@ -653,13 +770,13 @@ public:
             player.damageControlActive = false;
         }
 
-        // BVR Radar Ping (Space key)
+        // Radar Ping (Space key)
         if (IsKeyPressed(KEY_SPACE)) {
             TriggerRadarPing();
         }
 
         // Energy Core Regeneration
-        float regenRate = (difficulty == Difficulty::CADET) ? 15.0f : 10.0f;
+        float regenRate = (difficulty == Difficulty::CADET) ? 16.0f : 11.0f;
         if (!player.boosting && !player.shieldActive && !player.damageControlActive) {
             player.energy = fminf(player.maxEnergy, player.energy + regenRate * dt);
         }
@@ -677,7 +794,7 @@ public:
         player.distanceTraveled = fmaxf(player.distanceTraveled, player.position.x);
         player.currentSector = 1 + (int)(player.position.x / 2500.0f);
 
-        // Radar ping propagation
+        // Radar Ping propagation
         if (player.radarPingActive) {
             player.radarPingRadius += 1200.0f * dt;
             player.radarPingAlpha -= 1.2f * dt;
@@ -687,7 +804,7 @@ public:
         }
 
         // -----------------------------------------------------
-        // Passage Wall Collision Check
+        // Passage Wall Collisions
         // -----------------------------------------------------
         PassageSlice currentSlice = GetPassageAtX(player.position.x);
         if (player.position.y - player.radius < currentSlice.ceilingY()) {
@@ -699,7 +816,77 @@ public:
         }
 
         // -----------------------------------------------------
-        // Traps Logic & Collision
+        // Void Leviathan Monster Pursuit Logic
+        // -----------------------------------------------------
+        monster.spawnTimer -= dt;
+        monster.jawAnim += dt * 8.0f;
+
+        if (monster.spawnTimer <= 0.0f && !monster.pursuing) {
+            // Activate Monster Hunt Phase
+            monster.pursuing = true;
+            monster.position = Vector2{ player.position.x - 750.0f, player.position.y };
+            for (auto &seg : monster.tailSegments) seg = monster.position;
+            PlaySound(audio.sndRoar);
+            screenShake = 1.0f;
+        }
+
+        if (monster.pursuing) {
+            monster.roarTimer += dt;
+            if (monster.roarTimer > 6.5f) {
+                monster.roarTimer = 0.0f;
+                PlaySound(audio.sndRoar);
+                screenShake = 0.5f;
+            }
+
+            // Monster chase speed: faster than unboosted jet (350 - 450 px/s)
+            float monsterBaseSpeed = 340.0f;
+            if (difficulty == Difficulty::VOID_WALKER) monsterBaseSpeed = 385.0f;
+            if (difficulty == Difficulty::APOCALYPSE) monsterBaseSpeed = 430.0f;
+
+            Vector2 toPlayer = Vector2Subtract(player.position, monster.position);
+            Vector2 monsterDir = Vector2Normalize(toPlayer);
+            monster.velocity = Vector2Scale(monsterDir, monsterBaseSpeed);
+            monster.position = Vector2Add(monster.position, Vector2Scale(monster.velocity, dt));
+
+            // Undulating serpentine tail simulation
+            monster.tailSegments[0] = monster.position;
+            for (size_t i = 1; i < monster.tailSegments.size(); ++i) {
+                Vector2 segDir = Vector2Subtract(monster.tailSegments[i], monster.tailSegments[i - 1]);
+                float segDist = Vector2Length(segDir);
+                if (segDist > 24.0f) {
+                    segDir = Vector2Normalize(segDir);
+                    monster.tailSegments[i] = Vector2Add(monster.tailSegments[i - 1], Vector2Scale(segDir, 24.0f));
+                }
+            }
+
+            // Void miasma particles from beast
+            if (rand() % 2 == 0) {
+                SpawnParticle(
+                    Vector2{ monster.position.x + (float)(rand() % 30 - 15), monster.position.y + (float)(rand() % 30 - 15) },
+                    Vector2{ -80.0f - (float)(rand() % 60), (float)(rand() % 60 - 30) },
+                    Color{ 180, 20, 50, 200 }, 6.0f, 0.45f
+                );
+            }
+
+            // Game Over: Monster catches spaceship
+            float distToShip = Vector2Distance(player.position, monster.position);
+            if (distToShip < (player.radius + monster.radius - 8.0f)) {
+                for (int k = 0; k < 35; ++k) {
+                    SpawnParticle(player.position, { (float)(rand() % 340 - 170), (float)(rand() % 340 - 170) }, Color{ 255, 30, 60, 255 }, 6.5f, 0.8f);
+                }
+                TriggerGameOver("DEVOUR-KILL BY VOID LEVIATHAN - SPRINT BOOST FAILED");
+                return;
+            }
+
+            // Leviathan temporarily retreats if player boosts far ahead
+            if (monster.position.x < player.position.x - 1100.0f) {
+                monster.pursuing = false;
+                monster.spawnTimer = 16.0f + (rand() % 8); // Re-engages pursuit in 16-24s
+            }
+        }
+
+        // -----------------------------------------------------
+        // Traps Logic
         // -----------------------------------------------------
         for (auto &t : traps) {
             if (!t.active) continue;
@@ -732,10 +919,9 @@ public:
                 t.triggered = (fmodf(t.timer, 3.5f) < 2.0f);
             }
 
-            // Trap Collision
             if (t.active && distToPlayer < (player.radius + t.radius)) {
                 if (t.type == TrapType::LASER_TRIPWIRE && !t.triggered) {
-                    // Safe during window
+                    // Safe window
                 } else {
                     ApplyImpactDamage(28.0f);
                     t.active = false;
@@ -777,7 +963,6 @@ public:
                 player.heartsCollected++;
                 PlaySound(audio.sndHeart);
 
-                // Burst of radiant pink & red heart healing particles
                 for (int k = 0; k < 18; ++k) {
                     SpawnParticle(hp.position, { (float)(rand() % 180 - 90), (float)(rand() % 180 - 90) }, Color{ 255, 50, 100, 255 }, 5.0f, 0.6f);
                 }
@@ -800,7 +985,6 @@ public:
             if (!h.active) continue;
             h.animTimer += dt;
 
-            // Seeker drones track jet elevation gently
             if (h.type == HazardType::SEEKER_DRONE) {
                 float dy = player.position.y - h.position.y;
                 h.velocity.y = Clamp(dy * 2.0f, -120.0f, 120.0f);
@@ -808,7 +992,6 @@ public:
 
             h.position = Vector2Add(h.position, Vector2Scale(h.velocity, dt));
 
-            // Missiles leave smoke trail
             if (h.type == HazardType::CRUISE_MISSILE && (rand() % 2 == 0)) {
                 SpawnParticle(
                     Vector2{ h.position.x + 16.0f, h.position.y },
@@ -845,7 +1028,7 @@ public:
             }
         }
 
-        // Check Sector Victory
+        // Check Victory
         if (player.position.x >= passageLength - 400.0f) {
             state = GameState::SECTOR_CLEARED;
             CalculateFinalScore(true);
@@ -936,6 +1119,7 @@ public:
         DrawHearts();
         DrawTraps();
         DrawEnemyHazardsWorld();
+        DrawLeviathanMonster();
         DrawParticles();
         DrawPlayerJet();
         EndMode2D();
@@ -943,7 +1127,7 @@ public:
         // 2. Dynamic Fog-of-War Render Texture Mask
         DrawDynamicFogOfWar();
 
-        // 3. Ultra-Crisp Tactical HUD, BVR Radar & Life status
+        // 3. Ultra-Crisp Tactical HUD, BVR Radar, Life status & Monster Alert
         DrawTacticalHUD();
 
         if (state == GameState::PAUSED) {
@@ -1000,17 +1184,14 @@ public:
         }
     }
 
-    // DRAW LIFE HEARTS
     void DrawHearts() {
         for (const auto &hp : hearts) {
             if (hp.collected) continue;
             Vector2 pos = { hp.position.x, hp.position.y + hp.floatOffset };
             float pulse = sinf(hp.pulsePhase) * 2.0f;
 
-            // Heart glow
             DrawCircleGradient((int)pos.x, (int)pos.y, 22.0f + pulse, Color{ 255, 40, 80, 150 }, BLANK);
 
-            // Draw Heart Shape using two circles and a triangle
             float size = 8.0f + pulse * 0.4f;
             Vector2 leftCenter  = { pos.x - size * 0.55f, pos.y - size * 0.3f };
             Vector2 rightCenter = { pos.x + size * 0.55f, pos.y - size * 0.3f };
@@ -1022,7 +1203,6 @@ public:
             Vector2 tC = { pos.x, pos.y + size * 1.1f };
             DrawTriangle(tA, tB, tC, Color{ 255, 40, 80, 255 });
 
-            // Highlight glint
             DrawCircle((int)(pos.x - size * 0.5f), (int)(pos.y - size * 0.5f), 2.0f, RAYWHITE);
         }
     }
@@ -1032,18 +1212,15 @@ public:
             if (!t.active) continue;
 
             if (t.type == TrapType::STALACTITE_FALLING) {
-                // Rock cone
                 Vector2 topA = { t.position.x - 12.0f, t.position.y - 22.0f };
                 Vector2 topB = { t.position.x + 12.0f, t.position.y - 22.0f };
                 Vector2 tip  = { t.position.x, t.position.y + 16.0f };
                 DrawTriangle(topA, tip, topB, Color{ 190, 80, 70, 255 });
                 DrawTriangleLines(topA, tip, topB, Color{ 255, 140, 110, 255 });
             } else if (t.type == TrapType::PROXIMITY_MINE) {
-                // Spiky Naval/Space Proximity Mine
                 DrawCircleV(t.position, t.radius, Color{ 45, 15, 15, 255 });
                 DrawCircleLines((int)t.position.x, (int)t.position.y, t.radius, t.triggered ? RED : Color{ 220, 50, 50, 255 });
 
-                // Spikes protruding around circle
                 for (int sp = 0; sp < 8; ++sp) {
                     float ang = (float)sp * (PI / 4.0f) + totalElapsedTime * 1.5f;
                     Vector2 base = { t.position.x + cosf(ang) * t.radius, t.position.y + sinf(ang) * t.radius };
@@ -1051,7 +1228,6 @@ public:
                     DrawLineEx(base, tip, 2.5f, Color{ 255, 70, 70, 255 });
                 }
 
-                // Core blinking eye
                 DrawCircleV(t.position, 5.0f, t.triggered ? RED : ORANGE);
             } else if (t.type == TrapType::LASER_TRIPWIRE) {
                 PassageSlice s = GetPassageAtX(t.position.x);
@@ -1071,47 +1247,72 @@ public:
         }
     }
 
-    // DRAW LOGICAL ENEMY SHAPES: MISSILE, BOMB, SEEKER
     void DrawEnemyHazardsWorld() {
         for (const auto &h : hazards) {
             if (!h.active) continue;
 
             if (h.type == HazardType::CRUISE_MISSILE) {
-                // Sleek Cruise Missile flying left
                 Vector2 p = h.position;
                 DrawCircleGradient((int)p.x + 14, (int)p.y, 16.0f, Color{ 255, 120, 30, 200 }, BLANK);
-
-                // Missile body
                 DrawRectangle((int)p.x - 12, (int)p.y - 4, 24, 8, Color{ 210, 220, 230, 255 });
-                // Warhead nose cone pointing left
                 Vector2 nose = { p.x - 20.0f, p.y };
                 Vector2 nA   = { p.x - 12.0f, p.y - 4.0f };
                 Vector2 nB   = { p.x - 12.0f, p.y + 4.0f };
                 DrawTriangle(nose, nA, nB, RED);
-
-                // Tail stabilizer fins
                 DrawTriangle({ p.x + 12.0f, p.y - 4.0f }, { p.x + 8.0f, p.y - 10.0f }, { p.x + 16.0f, p.y - 4.0f }, Color{ 70, 80, 95, 255 });
                 DrawTriangle({ p.x + 12.0f, p.y + 4.0f }, { p.x + 8.0f, p.y + 10.0f }, { p.x + 16.0f, p.y + 4.0f }, Color{ 70, 80, 95, 255 });
             } else if (h.type == HazardType::HEAVY_BOMB) {
-                // Heavy Aerial Bomb (rounded teardrop with cross fins)
                 Vector2 p = h.position;
                 DrawCircleGradient((int)p.x, (int)p.y, 22.0f, Color{ 255, 80, 20, 160 }, BLANK);
                 DrawCircleV(p, 13.0f, Color{ 55, 60, 70, 255 });
                 DrawCircleV({ p.x - 4.0f, p.y }, 11.0f, Color{ 75, 85, 95, 255 });
-
-                // Yellow Hazard Stripe
                 DrawRectangle((int)p.x - 4, (int)p.y - 10, 4, 20, YELLOW);
-
-                // Tail fins
                 DrawRectangle((int)p.x + 10, (int)p.y - 6, 6, 12, Color{ 40, 45, 50, 255 });
             } else {
-                // Seeker Drone (diamond hull with red scanning lens)
                 Vector2 p = h.position;
                 DrawPoly(p, 4, 15.0f, totalElapsedTime * 90.0f, Color{ 160, 40, 40, 255 });
                 DrawPolyLines(p, 4, 16.0f, totalElapsedTime * 90.0f, RED);
                 DrawCircleV(p, 4.0f, RAYWHITE);
             }
         }
+    }
+
+    // DRAW THE CHRONO-VOID LEVIATHAN MONSTER
+    void DrawLeviathanMonster() {
+        if (!monster.pursuing) return;
+
+        // Draw segmented undulating body
+        for (size_t i = monster.tailSegments.size() - 1; i > 0; --i) {
+            float t = (float)i / (float)monster.tailSegments.size();
+            float segR = Lerp(monster.radius * 0.85f, 10.0f, t);
+            Color segCol = Color{ (unsigned char)Lerp(120, 40, t), (unsigned char)Lerp(15, 5, t), (unsigned char)Lerp(30, 10, t), 255 };
+            DrawCircleV(monster.tailSegments[i], segR, segCol);
+            DrawCircleLines((int)monster.tailSegments[i].x, (int)monster.tailSegments[i].y, segR, Color{ 230, 40, 70, 120 });
+        }
+
+        Vector2 p = monster.position;
+        float angleToPlayer = atan2f(player.position.y - p.y, player.position.x - p.x);
+
+        // Sinister monster head glow
+        DrawCircleGradient((int)p.x, (int)p.y, 75.0f, Color{ 255, 20, 60, 140 }, BLANK);
+        DrawCircleV(p, monster.radius, Color{ 45, 10, 20, 255 });
+        DrawCircleLines((int)p.x, (int)p.y, monster.radius, Color{ 255, 60, 80, 255 });
+
+        // Mandibles / Jaws
+        float jawOpen = sinf(monster.jawAnim) * 0.35f + 0.45f;
+        Vector2 upperMandible = { p.x + cosf(angleToPlayer - jawOpen) * 44.0f, p.y + sinf(angleToPlayer - jawOpen) * 44.0f };
+        Vector2 lowerMandible = { p.x + cosf(angleToPlayer + jawOpen) * 44.0f, p.y + sinf(angleToPlayer + jawOpen) * 44.0f };
+
+        DrawTriangle(p, upperMandible, { p.x + cosf(angleToPlayer - jawOpen - 0.2f) * 22.0f, p.y + sinf(angleToPlayer - jawOpen - 0.2f) * 22.0f }, Color{ 200, 20, 50, 255 });
+        DrawTriangle(p, lowerMandible, { p.x + cosf(angleToPlayer + jawOpen + 0.2f) * 22.0f, p.y + sinf(angleToPlayer + jawOpen + 0.2f) * 22.0f }, Color{ 200, 20, 50, 255 });
+
+        // Bioluminescent eyes
+        Vector2 eye1 = { p.x + cosf(angleToPlayer - 0.4f) * 22.0f, p.y + sinf(angleToPlayer - 0.4f) * 22.0f };
+        Vector2 eye2 = { p.x + cosf(angleToPlayer + 0.4f) * 22.0f, p.y + sinf(angleToPlayer + 0.4f) * 22.0f };
+        DrawCircleV(eye1, 6.0f, Color{ 255, 240, 50, 255 });
+        DrawCircleV(eye2, 6.0f, Color{ 255, 240, 50, 255 });
+        DrawCircleV(eye1, 2.5f, BLACK);
+        DrawCircleV(eye2, 2.5f, BLACK);
     }
 
     void DrawParticles() {
@@ -1122,45 +1323,82 @@ public:
         }
     }
 
-    // DRAW LOGICAL PLAYER CHARACTER: SUPERSONIC DELTA-WING JET FIGHTER
+    // VISUAL UPGRADE: STYLIZED SCI-FI INTERCEPTOR SPACESHIP
     void DrawPlayerJet() {
         Vector2 p = player.position;
         float ang = player.angle;
 
         // Twin Afterburner Thruster Glow
-        DrawCircleGradient((int)p.x, (int)p.y, 38.0f, Color{ 0, 180, 255, 65 }, BLANK);
+        Color engineGlow = player.boosting ? Color{ 0, 220, 255, 140 } : Color{ 56, 189, 248, 70 };
+        DrawCircleGradient((int)p.x, (int)p.y, player.boosting ? 55.0f : 36.0f, engineGlow, BLANK);
 
-        // Jet Coordinates
-        Vector2 noseTip   = { p.x + cosf(ang) * 26.0f, p.y + sinf(ang) * 26.0f };
-        Vector2 leftWing  = { p.x + cosf(ang + 2.45f) * 24.0f, p.y + sinf(ang + 2.45f) * 24.0f };
-        Vector2 rightWing = { p.x + cosf(ang - 2.45f) * 24.0f, p.y + sinf(ang - 2.45f) * 24.0f };
-        Vector2 tailLeft  = { p.x + cosf(ang + 2.85f) * 16.0f, p.y + sinf(ang + 2.85f) * 16.0f };
-        Vector2 tailRight = { p.x + cosf(ang - 2.85f) * 16.0f, p.y + sinf(ang - 2.85f) * 16.0f };
+        // Spaceship Coordinate Transformation Helper
+        auto Trans = [&](float fwd, float right) -> Vector2 {
+            return Vector2{
+                p.x + cosf(ang) * fwd - sinf(ang) * right,
+                p.y + sinf(ang) * fwd + cosf(ang) * right
+            };
+        };
 
-        // Delta Wings (Main Airframe)
-        DrawTriangle(noseTip, leftWing, tailLeft, Color{ 210, 225, 245, 255 });
-        DrawTriangle(noseTip, tailRight, rightWing, Color{ 190, 205, 230, 255 });
-        DrawTriangle(noseTip, tailLeft, tailRight, Color{ 230, 240, 255, 255 });
+        // Key Spaceship Hull Vertices
+        Vector2 nosePoint        = Trans(32.0f, 0.0f);
+        Vector2 noseChineL       = Trans(18.0f, -6.0f);
+        Vector2 noseChineR       = Trans(18.0f, 6.0f);
 
-        // Delta Wing Outlines & Panel Lines
-        DrawLineEx(noseTip, leftWing, 2.0f, Color{ 56, 189, 248, 255 });
-        DrawLineEx(noseTip, rightWing, 2.0f, Color{ 56, 189, 248, 255 });
-        DrawLineEx(leftWing, tailLeft, 2.0f, Color{ 30, 58, 110, 255 });
-        DrawLineEx(rightWing, tailRight, 2.0f, Color{ 30, 58, 110, 255 });
+        Vector2 mainWingTipL     = Trans(-4.0f, -28.0f);
+        Vector2 mainWingTipR     = Trans(-4.0f, 28.0f);
 
-        // Wingtip Navigation Lights (Green starboard, Red port)
-        DrawCircleV(leftWing, 3.0f, RED);
-        DrawCircleV(rightWing, 3.0f, GREEN);
+        Vector2 wingletL         = Trans(8.0f, -26.0f);
+        Vector2 wingletR         = Trans(8.0f, 26.0f);
 
-        // Cockpit Canopy (Tinted Cyan Glass with reflection)
-        Vector2 cockpitPos = { p.x + cosf(ang) * 9.0f, p.y + sinf(ang) * 9.0f };
-        DrawEllipse((int)cockpitPos.x, (int)cockpitPos.y, 7, 3, Color{ 6, 182, 212, 255 });
-        DrawCircle((int)(cockpitPos.x + 2), (int)(cockpitPos.y - 1), 1.5f, RAYWHITE);
+        Vector2 nacelleL         = Trans(-20.0f, -11.0f);
+        Vector2 nacelleR         = Trans(-20.0f, 11.0f);
 
-        // Active Kinetic Shield Barrier
+        Vector2 engineCenterTail = Trans(-16.0f, 0.0f);
+
+        // 1. Aerodynamic Main Delta Wings (Dark Navy Titanium Hull)
+        DrawTriangle(nosePoint, mainWingTipL, engineCenterTail, Color{ 20, 28, 48, 255 });
+        DrawTriangle(nosePoint, engineCenterTail, mainWingTipR, Color{ 26, 36, 60, 255 });
+
+        // Forward-swept wingtip canards
+        DrawTriangle(wingletL, mainWingTipL, Trans(-12.0f, -20.0f), Color{ 14, 165, 233, 255 });
+        DrawTriangle(wingletR, mainWingTipR, Trans(-12.0f, 20.0f), Color{ 14, 165, 233, 255 });
+
+        // 2. Central Armored Fuselage Chassis (Bright Platina Coating)
+        DrawTriangle(nosePoint, noseChineL, Trans(-6.0f, 0.0f), Color{ 224, 238, 255, 255 });
+        DrawTriangle(nosePoint, Trans(-6.0f, 0.0f), noseChineR, Color{ 190, 210, 235, 255 });
+        DrawTriangle(noseChineL, nacelleL, Trans(-16.0f, 0.0f), Color{ 160, 185, 215, 255 });
+        DrawTriangle(noseChineR, Trans(-16.0f, 0.0f), nacelleR, Color{ 140, 165, 195, 255 });
+
+        // 3. Cybernetic Plasma Outlines & Hull Seam Panel Lines
+        DrawLineEx(nosePoint, wingletL, 2.0f, Color{ 56, 189, 248, 255 });
+        DrawLineEx(nosePoint, wingletR, 2.0f, Color{ 56, 189, 248, 255 });
+        DrawLineEx(mainWingTipL, nacelleL, 2.0f, Color{ 14, 116, 144, 255 });
+        DrawLineEx(mainWingTipR, nacelleR, 2.0f, Color{ 14, 116, 144, 255 });
+        DrawLineEx(noseChineL, nacelleL, 1.5f, Color{ 255, 255, 255, 180 });
+        DrawLineEx(noseChineR, nacelleR, 1.5f, Color{ 255, 255, 255, 180 });
+
+        // 4. Twin Dual Engine Thruster Exhaust Conduits
+        DrawCircleV(nacelleL, 4.5f, player.boosting ? Color{ 0, 240, 255, 255 } : Color{ 249, 115, 22, 255 });
+        DrawCircleV(nacelleR, 4.5f, player.boosting ? Color{ 0, 240, 255, 255 } : Color{ 249, 115, 22, 255 });
+        DrawCircleV(nacelleL, 2.0f, RAYWHITE);
+        DrawCircleV(nacelleR, 2.0f, RAYWHITE);
+
+        // 5. Stylized Glass Cockpit Canopy with Specular Glint
+        Vector2 cockpitFront = Trans(14.0f, 0.0f);
+        Vector2 cockpitBack  = Trans(-3.0f, 0.0f);
+        DrawLineEx(cockpitBack, cockpitFront, 5.0f, Color{ 6, 182, 212, 255 });
+        DrawLineEx(Trans(8.0f, -1.0f), Trans(13.0f, -1.0f), 2.0f, Color{ 240, 253, 255, 255 });
+
+        // 6. Navigation Strobe Lights on Wingtips
+        DrawCircleV(mainWingTipL, 3.0f, (fmodf(totalElapsedTime * 4.0f, 1.0f) > 0.5f) ? RED : Color{ 180, 20, 30, 255 });
+        DrawCircleV(mainWingTipR, 3.0f, (fmodf(totalElapsedTime * 4.0f, 1.0f) > 0.5f) ? GREEN : Color{ 20, 160, 40, 255 });
+
+        // 7. Kinetic Shield Dome
         if (player.shieldActive) {
-            DrawCircleGradient((int)p.x, (int)p.y, 36.0f, Color{ 0, 160, 255, 80 }, BLANK);
-            DrawPolyLines(p, 6, 32.0f, totalElapsedTime * 60.0f, Color{ 100, 220, 255, 220 });
+            DrawCircleGradient((int)p.x, (int)p.y, 42.0f, Color{ 0, 170, 255, 90 }, BLANK);
+            DrawPolyLines(p, 6, 36.0f, totalElapsedTime * 60.0f, Color{ 100, 225, 255, 230 });
+            DrawPolyLines(p, 6, 38.0f, -totalElapsedTime * 45.0f, Color{ 56, 189, 248, 150 });
         }
     }
 
@@ -1171,11 +1409,17 @@ public:
         Vector2 screenPlayer = GetWorldToScreen2D(player.position, camera);
 
         float vR = player.visionRadius;
-        if (player.boosting) vR += 40.0f;
+        if (player.boosting) vR += 45.0f;
         DrawCircleGradient((int)screenPlayer.x, (int)screenPlayer.y, vR, BLANK, Color{ 6, 8, 14, 235 });
 
         if (player.radarPingActive) {
             DrawCircleLines((int)screenPlayer.x, (int)screenPlayer.y, player.radarPingRadius, Color{ 0, 255, 200, (unsigned char)(player.radarPingAlpha * 255.0f) });
+        }
+
+        // Leviathan emits an eerie red fog clearance around itself
+        if (monster.pursuing) {
+            Vector2 screenMonster = GetWorldToScreen2D(monster.position, camera);
+            DrawCircleGradient((int)screenMonster.x, (int)screenMonster.y, 110.0f, BLANK, Color{ 6, 8, 14, 235 });
         }
 
         for (const auto &c : crystals) {
@@ -1194,22 +1438,18 @@ public:
         DrawTextureRec(fogTexture.texture, Rectangle{ 0.0f, 0.0f, (float)SCREEN_WIDTH, -(float)SCREEN_HEIGHT }, Vector2{ 0.0f, 0.0f }, WHITE);
     }
 
-    // ULTRA-CRISP HIGH CONTRAST HUD
+    // ULTRA-CRISP HIGH CONTRAST HUD & MONSTER ALERT
     void DrawTacticalHUD() {
-        // Top Bar Backing
         DrawRectangle(0, 0, SCREEN_WIDTH, 56, Color{ 10, 14, 24, 240 });
         DrawLine(0, 56, SCREEN_WIDTH, 56, Color{ 36, 50, 78, 255 });
 
-        // Title Badge
         DrawCard(15, 10, 180, 36, Color{ 15, 23, 42, 255 }, Color{ 56, 189, 248, 255 });
         DrawTextBold("LOST PASSAGE", 25, 18, 18, Color{ 224, 242, 254, 255 });
 
-        // Sector Badge
         std::string secStr = "SECTOR 0" + std::to_string(player.currentSector);
         DrawCard(205, 10, 120, 36, Color{ 15, 23, 42, 255 }, Color{ 0, 220, 255, 200 });
         DrawTextBold(secStr.c_str(), 215, 19, 16, Color{ 56, 189, 248, 255 });
 
-        // Countdown Timer Clock
         std::stringstream ssTime;
         ssTime << "TIME: " << std::fixed << std::setprecision(1) << timeRemaining << "s";
         Color timeBg = (timeRemaining < 15.0f) ? Color{ 80, 20, 20, 255 } : Color{ 40, 35, 15, 255 };
@@ -1217,7 +1457,6 @@ public:
         DrawCard(335, 10, 150, 36, timeBg, timeBorder);
         DrawTextBold(ssTime.str().c_str(), 350, 18, 18, timeBorder);
 
-        // Distance & Hearts Count
         DrawCard(495, 10, 130, 36, Color{ 15, 23, 42, 255 }, Color{ 70, 85, 110, 255 });
         std::string distStr = std::to_string((int)player.distanceTraveled) + "m";
         DrawTextBold(distStr.c_str(), 510, 19, 16, RAYWHITE);
@@ -1230,35 +1469,36 @@ public:
         std::string crysStr = "CRYSTALS: " + std::to_string(player.crystalsCollected);
         DrawTextBold(crysStr.c_str(), 775, 19, 14, Color{ 94, 234, 212, 255 });
 
-        // Menu hint button
         DrawCard(895, 10, 110, 36, Color{ 20, 25, 40, 255 }, Color{ 120, 140, 180, 255 });
         DrawTextBold("[M] MENU", 910, 20, 14, Color{ 180, 200, 230, 255 });
 
-        // -----------------------------------------------------
-        // Strategic Vital Gauges (Bottom Left)
-        // -----------------------------------------------------
+        // Leviathan Pursuit Warning Banner
+        if (monster.pursuing) {
+            float distToMonster = Vector2Distance(player.position, monster.position);
+            int alertAlpha = (int)(fabs(sinf(totalElapsedTime * 6.0f)) * 255.0f);
+            DrawCard(SCREEN_WIDTH / 2 - 220, 68, 440, 34, Color{ 60, 10, 15, 220 }, Color{ 239, 68, 68, (unsigned char)alertAlpha });
+            std::string threatStr = TextFormat("! WARNING: LEVIATHAN IN PURSUIT (%dm) - BOOST (SHIFT/RMB) !", (int)distToMonster);
+            DrawTextBold(threatStr.c_str(), SCREEN_WIDTH / 2 - MeasureText(threatStr.c_str(), 13) / 2, 78, 13, Color{ 255, 120, 120, 255 });
+        }
+
+        // Vital Gauges
         int barY = SCREEN_HEIGHT - 95;
-        DrawCard(20, barY - 10, 340, 85, Color{ 10, 15, 26, 240 }, Color{ 36, 50, 78, 255 });
+        DrawCard(20, barY - 10, 390, 85, Color{ 10, 15, 26, 240 }, Color{ 36, 50, 78, 255 });
 
-        // Hull Life Bar
-        DrawTextBold("JET HULL INTEGRITY", 32, barY + 2, 12, Color{ 200, 215, 235, 255 });
+        DrawTextBold("SHIP HULL INTEGRITY", 32, barY + 2, 12, Color{ 200, 215, 235, 255 });
         float hullRatio = player.hull / player.maxHull;
-        DrawRectangle(170, barY, 175, 14, Color{ 25, 35, 50, 255 });
+        DrawRectangle(180, barY, 210, 14, Color{ 25, 35, 50, 255 });
         Color hullCol = (hullRatio > 0.35f) ? Color{ 34, 197, 94, 255 } : Color{ 239, 68, 68, 255 };
-        DrawRectangle(170, barY, (int)(175 * hullRatio), 14, hullCol);
+        DrawRectangle(180, barY, (int)(210 * hullRatio), 14, hullCol);
 
-        // Energy Core Bar
         DrawTextBold("ENERGY CORE", 32, barY + 24, 12, Color{ 200, 215, 235, 255 });
         float energyRatio = player.energy / player.maxEnergy;
-        DrawRectangle(170, barY + 22, 175, 14, Color{ 25, 35, 50, 255 });
-        DrawRectangle(170, barY + 22, (int)(175 * energyRatio), 14, Color{ 2, 132, 199, 255 });
+        DrawRectangle(180, barY + 22, 210, 14, Color{ 25, 35, 50, 255 });
+        DrawRectangle(180, barY + 22, (int)(210 * energyRatio), 14, Color{ 2, 132, 199, 255 });
 
-        // Key Control Hints
-        DrawTextBold("[SHIFT] Boost  [E] Shield  [Q] Repair  [SPACE] Ping  [M] Menu", 32, barY + 48, 11, Color{ 125, 211, 252, 255 });
+        DrawTextBold("[WASD / MOUSE MOVE] Steer  [SHIFT / RMB] Boost  [E / MMB] Shield", 32, barY + 48, 11, Color{ 125, 211, 252, 255 });
 
-        // -----------------------------------------------------
-        // BVR Tactical Scanner Radar (Top Right)
-        // -----------------------------------------------------
+        // Tactical Scanner Radar
         int radarX = SCREEN_WIDTH - 220;
         int radarY = 70;
         int radarW = 200;
@@ -1268,17 +1508,27 @@ public:
         DrawTextBold("BVR RADAR SCANNER", radarX + 12, radarY + 10, 12, Color{ 56, 189, 248, 255 });
 
         DrawLine(radarX + 30, radarY + radarH / 2, radarX + radarW - 10, radarY + radarH / 2, Color{ 0, 120, 180, 100 });
-        DrawLine(radarX + 40, radarY + 25, radarX + 40, radarY + radarH - 10, Color{ 0, 120, 180, 100 });
+        DrawLine(radarX + 60, radarY + 25, radarX + 60, radarY + radarH - 10, Color{ 0, 120, 180, 100 });
 
-        // Jet dot
-        DrawCircle(radarX + 40, radarY + radarH / 2, 4.0f, Color{ 34, 211, 238, 255 });
+        // Spaceship indicator dot
+        DrawCircle(radarX + 60, radarY + radarH / 2, 4.0f, Color{ 34, 211, 238, 255 });
+
+        // Leviathan on radar (pulsing large red blip behind ship)
+        if (monster.pursuing) {
+            float mdx = monster.position.x - player.position.x;
+            float radarDotX = Clamp(radarX + 60.0f + (mdx / 1400.0f) * (radarW - 55.0f), (float)radarX + 10.0f, (float)radarX + radarW - 10.0f);
+            float mdy = (monster.position.y - player.position.y) * 0.15f;
+            float radarDotY = Clamp(radarY + radarH / 2 + mdy, (float)radarY + 25.0f, (float)radarY + radarH - 12.0f);
+            DrawCircle((int)radarDotX, (int)radarDotY, 6.0f, Color{ 255, 30, 60, 255 });
+            DrawTextBold("LEVIATHAN", (int)radarDotX - 25, (int)radarDotY - 14, 10, Color{ 255, 100, 100, 255 });
+        }
 
         // Hazards on radar
         for (const auto &h : hazards) {
             if (!h.active) continue;
             float dx = h.position.x - player.position.x;
             if (dx > 0.0f && dx < 1400.0f) {
-                float radarDotX = radarX + 40.0f + (dx / 1400.0f) * (radarW - 55.0f);
+                float radarDotX = radarX + 60.0f + (dx / 1400.0f) * (radarW - 75.0f);
                 float dy = (h.position.y - player.position.y) * 0.15f;
                 float radarDotY = Clamp(radarY + radarH / 2 + dy, (float)radarY + 25.0f, (float)radarY + radarH - 12.0f);
 
@@ -1292,7 +1542,6 @@ public:
     void DrawTitleScreen() {
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 8, 12, 20, 255 });
 
-        // Grid lines
         for (int x = 0; x < SCREEN_WIDTH; x += 60) {
             DrawLine(x, 0, x, SCREEN_HEIGHT, Color{ 20, 30, 48, 80 });
         }
@@ -1300,37 +1549,35 @@ public:
             DrawLine(0, y, SCREEN_WIDTH, y, Color{ 20, 30, 48, 80 });
         }
 
-        // Title Header Card
-        DrawCard(SCREEN_WIDTH / 2 - 340, 60, 680, 110, Color{ 12, 18, 30, 250 }, Color{ 56, 189, 248, 255 });
-        DrawTextBold("THE LOST PASSAGE", SCREEN_WIDTH / 2 - MeasureText("THE LOST PASSAGE", 42) / 2, 80, 42, Color{ 240, 249, 255, 255 });
-        DrawTextBold("2D PROCEDURAL CAVERN JET RUNNER · RAYLIB C++ ENGINE", SCREEN_WIDTH / 2 - MeasureText("2D PROCEDURAL CAVERN JET RUNNER · RAYLIB C++ ENGINE", 14) / 2, 130, 14, Color{ 56, 189, 248, 255 });
+        DrawCard(SCREEN_WIDTH / 2 - 360, 50, 720, 115, Color{ 12, 18, 30, 250 }, Color{ 56, 189, 248, 255 });
+        DrawTextBold("THE LOST PASSAGE: VOID RUNNER", SCREEN_WIDTH / 2 - MeasureText("THE LOST PASSAGE: VOID RUNNER", 38) / 2, 70, 38, Color{ 240, 249, 255, 255 });
+        DrawTextBold("2D PROCEDURAL SPACESHIPI CAVERN ENGINE · RAYLIB C++", SCREEN_WIDTH / 2 - MeasureText("2D PROCEDURAL SPACESHIPI CAVERN ENGINE · RAYLIB C++", 14) / 2, 122, 14, Color{ 56, 189, 248, 255 });
 
-        // Multiple Hardness Levels Card
-        DrawCard(SCREEN_WIDTH / 2 - 340, 185, 680, 180, Color{ 12, 18, 30, 250 }, Color{ 40, 60, 90, 255 });
-        DrawTextBold("SELECT HARDNESS LEVEL (PRESS 1, 2, 3, or 4):", SCREEN_WIDTH / 2 - 200, 200, 16, RAYWHITE);
+        DrawCard(SCREEN_WIDTH / 2 - 360, 180, 720, 175, Color{ 12, 18, 30, 250 }, Color{ 40, 60, 90, 255 });
+        DrawTextBold("SELECT HARDNESS LEVEL (PRESS 1, 2, 3, or 4):", SCREEN_WIDTH / 2 - 200, 195, 16, RAYWHITE);
 
-        DrawTextBold("[1] CADET (Recon - Wide Caverns, Gentle Traps, 160 HP, 90s Timer)", SCREEN_WIDTH / 2 - 300, 235, 14, (difficulty == Difficulty::CADET) ? Color{ 45, 212, 191, 255 } : Color{ 100, 116, 139, 255 });
-        DrawTextBold("[2] COMMANDER (Tactical - Balanced Traps & Hazards, 100 HP, 60s Timer)", SCREEN_WIDTH / 2 - 300, 265, 14, (difficulty == Difficulty::COMMANDER) ? Color{ 45, 212, 191, 255 } : Color{ 100, 116, 139, 255 });
-        DrawTextBold("[3] VOID WALKER (Hardcore - Narrow Chokepoints, High-Speed Missiles, 70 HP)", SCREEN_WIDTH / 2 - 300, 295, 14, (difficulty == Difficulty::VOID_WALKER) ? Color{ 45, 212, 191, 255 } : Color{ 100, 116, 139, 255 });
-        DrawTextBold("[4] APOCALYPSE (Insane - Lethal Barrages, Dense Mines, 50 HP, 35s Timer)", SCREEN_WIDTH / 2 - 300, 325, 14, (difficulty == Difficulty::APOCALYPSE) ? Color{ 239, 68, 68, 255 } : Color{ 100, 116, 139, 255 });
+        DrawTextBold("[1] CADET (Recon - Wide Caverns, Gentle Traps, 160 HP, 90s Timer)", SCREEN_WIDTH / 2 - 320, 225, 14, (difficulty == Difficulty::CADET) ? Color{ 45, 212, 191, 255 } : Color{ 100, 116, 139, 255 });
+        DrawTextBold("[2] COMMANDER (Tactical - Balanced Traps & Hazards, 100 HP, 60s Timer)", SCREEN_WIDTH / 2 - 320, 255, 14, (difficulty == Difficulty::COMMANDER) ? Color{ 45, 212, 191, 255 } : Color{ 100, 116, 139, 255 });
+        DrawTextBold("[3] VOID WALKER (Hardcore - Tight Gaps, Rapid Missiles, Aggressive Monster, 70 HP)", SCREEN_WIDTH / 2 - 320, 285, 14, (difficulty == Difficulty::VOID_WALKER) ? Color{ 45, 212, 191, 255 } : Color{ 100, 116, 139, 255 });
+        DrawTextBold("[4] APOCALYPSE (Insane - Relentless Swarms, Frenzied Leviathan, 50 HP, 35s Timer)", SCREEN_WIDTH / 2 - 320, 315, 14, (difficulty == Difficulty::APOCALYPSE) ? Color{ 239, 68, 68, 255 } : Color{ 100, 116, 139, 255 });
 
-        // Pilot Controls Briefing
-        DrawCard(SCREEN_WIDTH / 2 - 340, 380, 680, 150, Color{ 12, 18, 30, 250 }, Color{ 40, 60, 90, 255 });
-        DrawTextBold("FLIGHT CONTROLS & SUBSYSTEMS", SCREEN_WIDTH / 2 - 130, 395, 15, Color{ 56, 189, 248, 255 });
-        DrawTextBold("- WASD or ARROW KEYS : Delta Jet Propulsion & Directional Vector", SCREEN_WIDTH / 2 - 310, 425, 13, RAYWHITE);
-        DrawTextBold("- LEFT SHIFT : Afterburner Boosters (Consumes Energy Core)", SCREEN_WIDTH / 2 - 310, 448, 13, RAYWHITE);
-        DrawTextBold("- E KEY : Deflector Shield  |  Q KEY : Nanite Repair  |  SPACE : BVR Ping", SCREEN_WIDTH / 2 - 310, 471, 13, RAYWHITE);
-        DrawTextBold("- HEARTS (Red Life Pickups) : Gather them in flight to heal +30 HP", SCREEN_WIDTH / 2 - 310, 494, 13, Color{ 255, 100, 150, 255 });
+        // Flight & Combat Controls
+        DrawCard(SCREEN_WIDTH / 2 - 360, 370, 720, 165, Color{ 12, 18, 30, 250 }, Color{ 40, 60, 90, 255 });
+        DrawTextBold("HYBRID FLIGHT CONTROLS & THREAT ADVISORY", SCREEN_WIDTH / 2 - 180, 385, 15, Color{ 56, 189, 248, 255 });
+        DrawTextBold("- STEERING : WASD / Arrow Keys OR Move / Drag Mouse Cursor in World", SCREEN_WIDTH / 2 - 330, 415, 13, RAYWHITE);
+        DrawTextBold("- SPRINT / BOOST : HOLD LEFT SHIFT or RIGHT MOUSE BUTTON to outrun the Leviathan", SCREEN_WIDTH / 2 - 330, 438, 13, Color{ 250, 204, 21, 255 });
+        DrawTextBold("- DEFENSE : [E] / Middle Mouse = Kinetic Shield  |  [Q] = Nanite Repair  |  [SPACE] = Ping", SCREEN_WIDTH / 2 - 330, 461, 13, RAYWHITE);
+        DrawTextBold("- RED HEARTS (+30 HP) & TIME CRYSTALS (+5s) : Essential survival resources", SCREEN_WIDTH / 2 - 330, 484, 13, Color{ 255, 100, 150, 255 });
+        DrawTextBold("- WARNING: If the Void Leviathan catches your spaceship, you will be devoured!", SCREEN_WIDTH / 2 - 330, 507, 13, Color{ 239, 68, 68, 255 });
 
-        // Launch Button CTA
-        DrawCard(SCREEN_WIDTH / 2 - 260, 550, 520, 60, Color{ 16, 40, 30, 250 }, Color{ 34, 197, 94, 255 });
-        DrawTextBold("PRESS [ENTER] OR [SPACE] TO LAUNCH JET", SCREEN_WIDTH / 2 - MeasureText("PRESS [ENTER] OR [SPACE] TO LAUNCH JET", 20) / 2, 570, 20, Color{ 74, 222, 128, 255 });
+        DrawCard(SCREEN_WIDTH / 2 - 270, 555, 540, 60, Color{ 16, 40, 30, 250 }, Color{ 34, 197, 94, 255 });
+        DrawTextBold("PRESS [ENTER], [SPACE] OR LEFT CLICK TO LAUNCH", SCREEN_WIDTH / 2 - MeasureText("PRESS [ENTER], [SPACE] OR LEFT CLICK TO LAUNCH", 19) / 2, 575, 19, Color{ 74, 222, 128, 255 });
     }
 
     void DrawEndScreen(bool victory) {
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 6, 10, 18, 220 });
 
-        int boxW = 580;
+        int boxW = 600;
         int boxH = 460;
         int boxX = SCREEN_WIDTH / 2 - boxW / 2;
         int boxY = SCREEN_HEIGHT / 2 - boxH / 2;
@@ -1346,7 +1593,6 @@ public:
             DrawTextBold(gameOverReason.c_str(), boxX + boxW / 2 - MeasureText(gameOverReason.c_str(), 14) / 2, boxY + 68, 14, Color{ 254, 202, 202, 255 });
         }
 
-        // Stats
         int statY = boxY + 110;
         DrawTextBold(TextFormat("FINAL FLIGHT DEPTH: %d m", (int)player.distanceTraveled), boxX + 60, statY, 16, RAYWHITE);
         DrawTextBold(TextFormat("TIME REMAINING: %.1f s", timeRemaining), boxX + 60, statY + 30, 16, RAYWHITE);
@@ -1354,7 +1600,6 @@ public:
         DrawTextBold(TextFormat("CHRONO-CRYSTALS: %d", player.crystalsCollected), boxX + 60, statY + 90, 16, Color{ 94, 234, 212, 255 });
         DrawTextBold(TextFormat("FINAL SCORE: %d PTS", finalScore), boxX + 60, statY + 125, 22, Color{ 250, 204, 21, 255 });
 
-        // Leaderboard
         DrawTextBold("TOP FLIGHT LOGS", boxX + 60, statY + 165, 14, Color{ 56, 189, 248, 255 });
         int leadY = statY + 190;
         for (size_t i = 0; i < (std::min)((size_t)3, leaderboard.size()); ++i) {
@@ -1362,30 +1607,23 @@ public:
             leadY += 22;
         }
 
-        // Return to Menu & Restart Options
-        DrawCard(boxX + 40, boxY + boxH - 65, 240, 45, Color{ 20, 28, 45, 255 }, Color{ 56, 189, 248, 255 });
+        DrawCard(boxX + 40, boxY + boxH - 65, 250, 45, Color{ 20, 28, 45, 255 }, Color{ 56, 189, 248, 255 });
         DrawTextBold("[M] RETURN TO MENU", boxX + 70, boxY + boxH - 50, 14, Color{ 56, 189, 248, 255 });
 
-        DrawCard(boxX + 300, boxY + boxH - 65, 240, 45, Color{ 20, 40, 30, 255 }, Color{ 34, 197, 94, 255 });
-        DrawTextBold("[R] RE-ENGAGE FLIGHT", boxX + 330, boxY + boxH - 50, 14, Color{ 74, 222, 128, 255 });
+        DrawCard(boxX + 310, boxY + boxH - 65, 250, 45, Color{ 20, 40, 30, 255 }, Color{ 34, 197, 94, 255 });
+        DrawTextBold("[R] RE-ENGAGE FLIGHT", boxX + 340, boxY + boxH - 50, 14, Color{ 74, 222, 128, 255 });
     }
 
-    // Helper to draw clean high-contrast rounded cards
     void DrawCard(int x, int y, int w, int h, Color bg, Color border) {
         DrawRectangle(x, y, w, h, bg);
         DrawRectangleLines(x, y, w, h, border);
     }
 
-    // Bold readable text helper
     void DrawTextBold(const char *text, int x, int y, int fontSize, Color color) {
-        // Shadow for ultra-readability
         DrawText(text, x + 1, y + 1, fontSize, Color{ 0, 0, 0, 220 });
         DrawText(text, x, y, fontSize, color);
     }
 
-    // ---------------------------------------------------------
-    // Leaderboard Persistence
-    // ---------------------------------------------------------
     void LoadLeaderboard() {
         leaderboard.clear();
         std::ifstream file("leaderboard.txt");
