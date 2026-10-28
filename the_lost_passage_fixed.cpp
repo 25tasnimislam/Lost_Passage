@@ -1,25 +1,17 @@
 /*******************************************************************************************
 *
-*   THE LOST PASSAGE: VOID RUNNER - Hangar & Modern Home UI Edition (Raylib C++17)
+*   THE LOST PASSAGE: DEOWAN VOID RUNNER (Raylib C++17)
 *
-*   Updates:
-*     - Clean, compact button-based Home UI with interactive hover & selection states
-*     - 3 Distinct Spaceship Classes:
-*         [1] VALKYRIE-IX (Cyan Interceptor - Balanced & Agile)
-*         [2] PHANTOM-STRIKER (Emerald Raider - High Speed & Energy)
-*         [3] DREADNOUGHT-V (Amber Cruiser - Heavy Hull & Thick Armor)
-*     - In-Menu Ship Selection Hangar with interactive previews
-*     - Enhanced Kinetic Shield ([E] / MMB) and Nanite Damage Control ([Q] / [R])
-*     - Retains bright pale yellow pathway, Fredoka Bold Game Over dialog, and sound engine
-*
-*   Compile on Windows (cmd.exe / MinGW / w64devkit):
-*     g++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -lopengl32 -lgdi32 -lwinmm -o lost_passage.exe
-*
-*   Compile on Linux:
-*     g++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -o lost_passage
-*
-*   Compile on macOS:
-*     clang++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -o lost_passage
+*   New Features:
+*     - Monster "DEOWAN" with an Audio/Visual Alarm Warning Pop-up
+*     - Fighter Jet Flare Defense System: Press [SPACE] to launch glowing flares
+*     - DEOWAN Detonation: Flares blast DEOWAN into a colorful particle explosion with custom SFX
+*     - Hard In-Game Music: Real-time hard-hitting industrial techno / darksynth BGM engine
+*     - 3 Distinct Passage Environments:
+*         [1] PALE SANDS (Bright Pale Yellow Runway & Golden Rims)
+*         [2] NEON VOID (Cyberpunk Obsidian, Electric Cyan & Hot Pink Laser Rails)
+*         [3] VOLCANIC ABYSS (Basalt Rock, Pulsing Magma & Fiery Molten Rims)
+*     - Preserves 3 Ship Classes, Modern Home UI, Fredoka Bold Game Over Dialog & Mouse Controls
 *
 ********************************************************************************************/
 
@@ -41,21 +33,15 @@
 #include <iomanip>
 
 // ---------------------------------------------------------
-// Global Constants & Pale Yellow Pathway Colors
+// Global Constants & Passage Themes
 // ---------------------------------------------------------
 const int SCREEN_WIDTH  = 1280;
 const int SCREEN_HEIGHT = 720;
 
-const Color PATH_BG_PALE_YELLOW   = Color{ 253, 250, 228, 255 }; 
-const Color PATH_RUNWAY_PALE      = Color{ 255, 244, 185, 255 }; 
-const Color PATH_WALL_CEIL_PALE   = Color{ 236, 222, 172, 255 }; 
-const Color PATH_WALL_FLOOR_PALE  = Color{ 226, 210, 154, 255 }; 
-const Color PATH_RIM_GLOW         = Color{ 255, 232, 110, 255 }; 
-const Color PATH_GUIDE_LINE       = Color{ 245, 205, 70, 140 };  
-
 enum class GameState {
     TITLE_MENU,
     SHIP_SELECT_MODAL,
+    PASSAGE_SELECT_MODAL,
     PLAYING,
     PAUSED,
     GAME_OVER,
@@ -70,9 +56,15 @@ enum class Difficulty {
 };
 
 enum class ShipType {
-    VALKYRIE,  // Speed & Bal: Azure Cyan
-    PHANTOM,   // Agile & Capacitor: Emerald Neon
-    DREADNOUGHT// Heavy Armor & Shield: Solar Amber
+    VALKYRIE,    // Balanced Cyan Interceptor
+    PHANTOM,     // High-Speed Emerald Stealth Raider
+    DREADNOUGHT  // Heavy Armor Solar Amber Cruiser
+};
+
+enum class PassageTheme {
+    PALE_SANDS,      // Bright Pale Yellow Cavern
+    NEON_VOID,       // Cyberpunk Obsidian, Cyan & Hot-Pink
+    VOLCANIC_ABYSS   // Fiery Magma, Obsidian & Molten Amber
 };
 
 // ---------------------------------------------------------
@@ -127,7 +119,7 @@ struct HoverButton {
 };
 
 // ---------------------------------------------------------
-// Particle System
+// Particle & Countermeasure Flare System
 // ---------------------------------------------------------
 struct Particle {
     Vector2 position;
@@ -137,6 +129,15 @@ struct Particle {
     float size;
     float life;
     float maxLife;
+};
+
+struct JetFlare {
+    Vector2 position;
+    Vector2 velocity;
+    float radius;
+    float life;
+    float maxLife;
+    bool active;
 };
 
 class ParticleSystem {
@@ -173,7 +174,7 @@ public:
 };
 
 // ---------------------------------------------------------
-// Procedural Synthetic Audio & Ambient Sci-Fi BGM
+// Procedural Audio Engine with Hard Combat Music Synthesizer
 // ---------------------------------------------------------
 class AudioSynthesizer {
 public:
@@ -187,6 +188,8 @@ public:
     Sound sndRepair;
     Sound sndRoar;
     Sound sndGameOver;
+    Sound sndFlare;
+    Sound sndMonsterBlast;
 
     AudioStream bgmStream;
     float bgmTime = 0.0f;
@@ -195,16 +198,18 @@ public:
 
     void Init() {
         InitAudioDevice();
-        sndBoost    = GenerateTone(140, 220, 0.25f, 0.35f, 1);
-        sndShield   = GenerateTone(350, 480, 0.30f, 0.30f, 0);
-        sndHit      = GenerateNoise(0.28f, 0.45f);
-        sndCrystal  = GenerateTone(880, 1320, 0.20f, 0.25f, 0);
-        sndHeart    = GenerateTone(520, 1040, 0.30f, 0.30f, 0);
-        sndPing     = GenerateTone(600, 950, 0.40f, 0.30f, 0);
-        sndAlarm    = GenerateTone(440, 330, 0.15f, 0.35f, 2);
-        sndRepair   = GenerateTone(520, 680, 0.35f, 0.25f, 0);
-        sndRoar     = GenerateMonsterRoar(0.9f, 0.55f);
-        sndGameOver = GenerateGameOverTune(1.8f, 0.50f);
+        sndBoost        = GenerateTone(140, 220, 0.25f, 0.35f, 1);
+        sndShield       = GenerateTone(350, 480, 0.30f, 0.30f, 0);
+        sndHit          = GenerateNoise(0.28f, 0.45f);
+        sndCrystal      = GenerateTone(880, 1320, 0.20f, 0.25f, 0);
+        sndHeart        = GenerateTone(520, 1040, 0.30f, 0.30f, 0);
+        sndPing         = GenerateTone(600, 950, 0.40f, 0.30f, 0);
+        sndAlarm        = GenerateSiren(0.25f, 0.50f);
+        sndRepair       = GenerateTone(520, 680, 0.35f, 0.25f, 0);
+        sndRoar         = GenerateMonsterRoar(1.1f, 0.65f);
+        sndGameOver     = GenerateGameOverTune(1.8f, 0.55f);
+        sndFlare        = GenerateTone(600, 150, 0.35f, 0.45f, 1);
+        sndMonsterBlast = GenerateExplosion(1.4f, 0.85f);
 
         SetAudioStreamBufferSizeDefault(4096);
         bgmStream = LoadAudioStream(44100, 16, 1);
@@ -212,13 +217,16 @@ public:
         bgmPlaying = true;
     }
 
+    // Heavy, Hard-Hitting Combat Synth BGM Engine
     void UpdateBGM(bool inGame, float threatIntensity) {
         if (!bgmPlaying || !IsAudioStreamProcessed(bgmStream)) return;
 
         const int sampleCount = 4096;
         short buffer[sampleCount];
         float sampleRate = 44100.0f;
-        static const float baseNotes[4] = { 110.0f, 130.81f, 164.81f, 196.0f };
+
+        // 138 BPM hard-tempo clock
+        float beatDuration = 60.0f / 138.0f;
 
         for (int i = 0; i < sampleCount; ++i) {
             bgmTime += 1.0f / sampleRate;
@@ -229,28 +237,52 @@ public:
             }
 
             if (!inGame) {
+                // Chill ambient hangar drone
                 float drone = sinf(2.0f * PI * 55.0f * bgmTime) * 0.15f + sinf(2.0f * PI * 110.0f * bgmTime) * 0.08f;
-                buffer[i] = (short)(drone * 32767.0f * 0.22f);
+                buffer[i] = (short)(drone * 32767.0f * 0.25f);
                 continue;
             }
 
-            int chordIdx = ((int)(bgmTime * 0.5f)) % 4;
-            float rootFreq = baseNotes[chordIdx];
+            // --- HARD COMBAT MUSIC GENERATOR ---
+            float beatPos = fmodf(bgmTime, beatDuration);
+            float beatProgress = beatPos / beatDuration;
 
-            int step = ((int)(bgmTime * 8.0f)) % 8;
-            float arpMult = (step == 0 || step == 4) ? 1.0f : (step == 2 || step == 6) ? 1.5f : (step == 7) ? 2.0f : 1.25f;
-            float arpFreq = rootFreq * arpMult;
+            // 1. Hard 4-on-the-Floor Sub Kick Drum with fast exponential pitch drop
+            float kickPitch = 150.0f * expf(-beatProgress * 26.0f) + 42.0f;
+            float kickTone = sinf(2.0f * PI * kickPitch * beatPos) * expf(-beatProgress * 7.0f);
 
-            float bassTone = sinf(2.0f * PI * (rootFreq * 0.5f) * bgmTime);
-            float arpTone  = fmodf(bgmTime * arpFreq, 1.0f) * 2.0f - 1.0f;
+            // 2. Aggressive 16th-Note Acid Saw Bassline
+            float sixteenthTime = fmodf(bgmTime, beatDuration * 0.25f);
+            int step16 = ((int)(bgmTime / (beatDuration * 0.25f))) % 16;
+            
+            // Hard minor industrial progression
+            float noteFreq = 55.0f; // A1
+            if (step16 >= 4 && step16 < 8)   noteFreq = 65.41f; // C2
+            if (step16 >= 8 && step16 < 12)  noteFreq = 73.42f; // D2
+            if (step16 >= 12 && step16 < 16) noteFreq = 82.41f; // E2
 
-            float pulse = 0.5f + 0.5f * sinf(bgmTime * 4.0f);
-            float monsterTension = threatIntensity * 0.35f * sinf(2.0f * PI * 44.0f * bgmTime);
+            float sawBass = (fmodf(sixteenthTime * noteFreq, 1.0f) * 2.0f - 1.0f);
+            // Non-linear hard overdrive saturation
+            sawBass = tanhf(sawBass * 2.8f) * expf(-(sixteenthTime / (beatDuration * 0.25f)) * 3.5f);
 
-            float mix = (bassTone * 0.22f) + (arpTone * 0.10f * pulse) + monsterTension;
-            mix = Clamp(mix, -1.0f, 1.0f);
+            // 3. Piercing Arp Synth Lead
+            float arpFreq = noteFreq * 4.0f;
+            if (step16 % 2 == 1) arpFreq *= 1.5f;
+            float arpLead = sinf(2.0f * PI * arpFreq * bgmTime) * 0.14f;
 
-            buffer[i] = (short)(mix * 32767.0f * 0.25f);
+            // 4. Clashing Hi-Hat Shaker
+            float hat = 0.0f;
+            if (step16 % 2 == 1) {
+                float rnd = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+                hat = rnd * expf(-(sixteenthTime / (beatDuration * 0.25f)) * 14.0f) * 0.12f;
+            }
+
+            // Mix & overdrive distortion when DEOWAN approaches
+            float distortionBoost = 1.0f + threatIntensity * 0.5f;
+            float mix = (kickTone * 0.50f) + (sawBass * 0.35f) + arpLead + hat;
+            mix = tanhf(mix * distortionBoost) * 0.38f;
+
+            buffer[i] = (short)(mix * 32767.0f);
         }
 
         UpdateAudioStream(bgmStream, buffer, sampleCount);
@@ -268,6 +300,8 @@ public:
         UnloadSound(sndRepair);
         UnloadSound(sndRoar);
         UnloadSound(sndGameOver);
+        UnloadSound(sndFlare);
+        UnloadSound(sndMonsterBlast);
         CloseAudioDevice();
     }
 
@@ -325,6 +359,29 @@ private:
         return s;
     }
 
+    Sound GenerateSiren(float duration, float volume) {
+        int sampleRate = 44100;
+        int sampleCount = (int)(sampleRate * duration);
+        short *data = (short *)malloc(sampleCount * sizeof(short));
+
+        for (int i = 0; i < sampleCount; ++i) {
+            float t = (float)i / sampleRate;
+            float freq = 650.0f + 350.0f * sinf(2.0f * PI * 6.0f * t);
+            float val = (sinf(2.0f * PI * freq * t) > 0.0f ? 0.6f : -0.6f) * volume;
+            data[i] = (short)(val * 32767.0f);
+        }
+
+        Wave wave{};
+        wave.frameCount = (unsigned int)sampleCount;
+        wave.sampleRate = (unsigned int)sampleRate;
+        wave.sampleSize = 16;
+        wave.channels = 1;
+        wave.data = data;
+        Sound s = LoadSoundFromWave(wave);
+        UnloadWave(wave);
+        return s;
+    }
+
     Sound GenerateMonsterRoar(float duration, float volume) {
         int sampleRate = 44100;
         int sampleCount = (int)(sampleRate * duration);
@@ -333,11 +390,36 @@ private:
         for (int i = 0; i < sampleCount; ++i) {
             float t = (float)i / sampleCount;
             float timeSec = (float)i / sampleRate;
-            float pitch = 140.0f * expf(-t * 1.8f) + 40.0f;
+            float pitch = 160.0f * expf(-t * 1.6f) + 40.0f;
             float rawGrowl = sinf(2.0f * PI * pitch * timeSec) + 0.6f * sinf(2.0f * PI * (pitch * 0.5f) * timeSec);
             float noise = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * 0.45f;
             float envelope = sinf(t * PI);
             data[i] = (short)((rawGrowl + noise) * envelope * volume * 32767.0f);
+        }
+
+        Wave wave{};
+        wave.frameCount = (unsigned int)sampleCount;
+        wave.sampleRate = (unsigned int)sampleRate;
+        wave.sampleSize = 16;
+        wave.channels = 1;
+        wave.data = data;
+        Sound s = LoadSoundFromWave(wave);
+        UnloadWave(wave);
+        return s;
+    }
+
+    Sound GenerateExplosion(float duration, float volume) {
+        int sampleRate = 44100;
+        int sampleCount = (int)(sampleRate * duration);
+        short *data = (short *)malloc(sampleCount * sizeof(short));
+
+        for (int i = 0; i < sampleCount; ++i) {
+            float t = (float)i / (float)sampleRate;
+            float subBass = sinf(2.0f * PI * (80.0f * expf(-t * 3.0f)) * t) * 0.7f;
+            float whiteNoise = (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f) * 0.7f;
+            float env = expf(-t * 2.4f);
+            float mix = (subBass + whiteNoise) * env * volume;
+            data[i] = (short)(mix * 32767.0f);
         }
 
         Wave wave{};
@@ -386,7 +468,7 @@ private:
 };
 
 // ---------------------------------------------------------
-// Terrain System: Pale Yellow Passage Slice & Generator
+// Terrain System: Multiple Passages (3 Visual Environments)
 // ---------------------------------------------------------
 struct PassageSlice {
     float x;
@@ -401,8 +483,10 @@ public:
     std::vector<PassageSlice> passage;
     float totalLength = 12000.0f;
     const float sliceStep = 25.0f;
+    PassageTheme theme = PassageTheme::PALE_SANDS;
 
-    void Generate(Difficulty diff) {
+    void Generate(Difficulty diff, PassageTheme chosenTheme) {
+        theme = chosenTheme;
         passage.clear();
         const int totalSlices = (int)(totalLength / sliceStep);
 
@@ -436,6 +520,35 @@ public:
     }
 
     void Draw(float targetX) const {
+        // Theme-driven dynamic color palette
+        Color colCorridorBg, colRunwayStrip, colCeilRock, colFloorRock, colRimGlow, colGuideLines;
+
+        if (theme == PassageTheme::PALE_SANDS) {
+            // [Theme 1]: Bright Pale Yellow Sands
+            colCorridorBg   = Color{ 253, 250, 228, 255 };
+            colRunwayStrip  = Color{ 255, 244, 185, 255 };
+            colCeilRock     = Color{ 236, 222, 172, 255 };
+            colFloorRock    = Color{ 226, 210, 154, 255 };
+            colRimGlow      = Color{ 255, 232, 110, 255 };
+            colGuideLines   = Color{ 245, 205, 70, 140 };
+        } else if (theme == PassageTheme::NEON_VOID) {
+            // [Theme 2]: Cyberpunk Obsidian & Hot Pink / Cyan Rails
+            colCorridorBg   = Color{ 20, 16, 36, 255 };
+            colRunwayStrip  = Color{ 36, 26, 62, 255 };
+            colCeilRock     = Color{ 14, 10, 26, 255 };
+            colFloorRock    = Color{ 12, 8, 22, 255 };
+            colRimGlow      = Color{ 236, 72, 153, 255 }; // Hot Pink neon
+            colGuideLines   = Color{ 6, 182, 212, 200 };  // Cyan cyber track
+        } else {
+            // [Theme 3]: Volcanic Magma Abyss
+            colCorridorBg   = Color{ 48, 16, 16, 255 };
+            colRunwayStrip  = Color{ 74, 22, 22, 255 };
+            colCeilRock     = Color{ 28, 10, 10, 255 };
+            colFloorRock    = Color{ 24, 8, 8, 255 };
+            colRimGlow      = Color{ 249, 115, 22, 255 }; // Molten Amber
+            colGuideLines   = Color{ 239, 68, 68, 180 };  // Lava Red
+        }
+
         for (size_t i = 0; i < passage.size() - 1; ++i) {
             const auto &p1 = passage[i];
             const auto &p2 = passage[i + 1];
@@ -444,35 +557,38 @@ public:
                 continue;
             }
 
+            // 1. Passage Interior Flight Runway
             Vector2 pathA = { p1.x, p1.ceilingY() };
             Vector2 pathB = { p2.x, p2.ceilingY() };
             Vector2 pathC = { p2.x, p2.floorY() };
             Vector2 pathD = { p1.x, p1.floorY() };
-            DrawTriangle(pathA, pathD, pathC, PATH_BG_PALE_YELLOW);
-            DrawTriangle(pathA, pathC, pathB, PATH_BG_PALE_YELLOW);
+            DrawTriangle(pathA, pathD, pathC, colCorridorBg);
+            DrawTriangle(pathA, pathC, pathB, colCorridorBg);
 
             Vector2 centerStart = { p1.x, p1.centerY };
             Vector2 centerEnd   = { p2.x, p2.centerY };
-            DrawLineEx(centerStart, centerEnd, 4.0f, PATH_RUNWAY_PALE);
+            DrawLineEx(centerStart, centerEnd, 5.0f, colRunwayStrip);
             if ((i % 4) == 0) {
-                DrawLineEx(centerStart, centerEnd, 2.0f, PATH_GUIDE_LINE);
+                DrawLineEx(centerStart, centerEnd, 2.5f, colGuideLines);
             }
 
+            // 2. Ceiling Rock Slab
             Vector2 cA = { p1.x, -500.0f };
             Vector2 cB = { p2.x, -500.0f };
             Vector2 cC = { p2.x, p2.ceilingY() };
             Vector2 cD = { p1.x, p1.ceilingY() };
-            DrawTriangle(cA, cD, cC, PATH_WALL_CEIL_PALE);
-            DrawTriangle(cA, cC, cB, PATH_WALL_CEIL_PALE);
-            DrawLineEx(cD, cC, 4.0f, PATH_RIM_GLOW);
+            DrawTriangle(cA, cD, cC, colCeilRock);
+            DrawTriangle(cA, cC, cB, colCeilRock);
+            DrawLineEx(cD, cC, 4.0f, colRimGlow);
 
+            // 3. Floor Rock Slab
             Vector2 fA = { p1.x, p1.floorY() };
             Vector2 fB = { p2.x, p2.floorY() };
             Vector2 fC = { p2.x, (float)SCREEN_HEIGHT + 500.0f };
             Vector2 fD = { p1.x, (float)SCREEN_HEIGHT + 500.0f };
-            DrawTriangle(fA, fC, fB, PATH_WALL_FLOOR_PALE);
-            DrawTriangle(fA, fD, fC, PATH_WALL_FLOOR_PALE);
-            DrawLineEx(fA, fB, 4.0f, PATH_RIM_GLOW);
+            DrawTriangle(fA, fC, fB, colFloorRock);
+            DrawTriangle(fA, fD, fC, colFloorRock);
+            DrawLineEx(fA, fB, 4.0f, colRimGlow);
         }
     }
 };
@@ -717,7 +833,7 @@ public:
 };
 
 // ---------------------------------------------------------
-// Enemy Hazards: Abstract Base & Derived Classes
+// Enemy Hazards: Missiles, Bombs & Seekers
 // ---------------------------------------------------------
 class HazardBase : public Entity {
 protected:
@@ -819,35 +935,39 @@ public:
 };
 
 // ---------------------------------------------------------
-// Void Leviathan Monster: Boss Chaser Entity
+// MONSTER "DEOWAN" - Encounter Boss with Early Alarm System
 // ---------------------------------------------------------
-class VoidLeviathan : public Entity {
+class DeowanMonster : public Entity {
 public:
     Vector2 position;
     Vector2 velocity;
     float radius;
     bool active;
     bool pursuing;
+    bool alarmTriggered;
     float spawnTimer;
+    float alarmSoundCooldown;
     float roarTimer;
     float jawAnim;
     std::vector<Vector2> tailSegments;
 
-    VoidLeviathan() {
+    DeowanMonster() {
         Reset();
     }
 
     void Reset() {
         active = true;
         pursuing = false;
-        position = { -600.0f, (float)SCREEN_HEIGHT / 2.0f };
+        alarmTriggered = false;
+        position = { -750.0f, (float)SCREEN_HEIGHT / 2.0f };
         velocity = { 0.0f, 0.0f };
-        radius = 38.0f;
-        spawnTimer = 8.0f;
+        radius = 42.0f;
+        spawnTimer = 9.0f;
+        alarmSoundCooldown = 0.0f;
         roarTimer = 0.0f;
         jawAnim = 0.0f;
         tailSegments.clear();
-        for (int i = 0; i < 9; ++i) tailSegments.push_back(position);
+        for (int i = 0; i < 11; ++i) tailSegments.push_back(position);
     }
 
     Vector2 GetPosition() const override { return position; }
@@ -855,11 +975,24 @@ public:
     bool IsActive() const override { return active && pursuing; }
 
     void Update(float dt, ParticleSystem &particles, AudioSynthesizer &audio) override {
-        jawAnim += dt * 8.0f;
+        jawAnim += dt * 8.5f;
+
         if (!pursuing) {
             spawnTimer -= dt;
+
+            // Early Warning Alarm Phase (triggers 3.8s before physical charge)
+            if (spawnTimer <= 3.8f) {
+                alarmTriggered = true;
+                alarmSoundCooldown -= dt;
+                if (alarmSoundCooldown <= 0.0f) {
+                    PlaySound(audio.sndAlarm);
+                    alarmSoundCooldown = 0.75f;
+                }
+            }
+
             if (spawnTimer <= 0.0f) {
                 pursuing = true;
+                alarmTriggered = false;
                 roarTimer = 0.0f;
                 PlaySound(audio.sndRoar);
             }
@@ -867,16 +1000,16 @@ public:
         }
 
         roarTimer += dt;
-        if (roarTimer > 6.5f) {
+        if (roarTimer > 6.0f) {
             roarTimer = 0.0f;
             PlaySound(audio.sndRoar);
         }
 
         if (rand() % 2 == 0) {
             particles.Emit(
-                Vector2{ position.x + (float)(rand() % 30 - 15), position.y + (float)(rand() % 30 - 15) },
-                Vector2{ -80.0f - (float)(rand() % 60), (float)(rand() % 60 - 30) },
-                Color{ 180, 20, 50, 200 }, 6.0f, 0.45f
+                Vector2{ position.x + (float)(rand() % 36 - 18), position.y + (float)(rand() % 36 - 18) },
+                Vector2{ -90.0f - (float)(rand() % 70), (float)(rand() % 70 - 35) },
+                Color{ 245, 30, 70, 220 }, 6.5f, 0.5f
             );
         }
     }
@@ -893,10 +1026,37 @@ public:
         for (size_t i = 1; i < tailSegments.size(); ++i) {
             Vector2 segDir = Vector2Subtract(tailSegments[i], tailSegments[i - 1]);
             float segDist = Vector2Length(segDir);
-            if (segDist > 24.0f) {
+            if (segDist > 25.0f) {
                 segDir = Vector2Normalize(segDir);
-                tailSegments[i] = Vector2Add(tailSegments[i - 1], Vector2Scale(segDir, 24.0f));
+                tailSegments[i] = Vector2Add(tailSegments[i - 1], Vector2Scale(segDir, 25.0f));
             }
+        }
+    }
+
+    // Triggered when Jet Flares intercept DEOWAN
+    void BlastByFlares(ParticleSystem &particles, AudioSynthesizer &audio) {
+        pursuing = false;
+        alarmTriggered = false;
+        spawnTimer = 18.0f; // Retreats, returns later
+        position = Vector2{ -800.0f, (float)SCREEN_HEIGHT / 2.0f };
+
+        PlaySound(audio.sndMonsterBlast);
+
+        // Spectacular Multi-Colored Blast Particles
+        for (int i = 0; i < 55; ++i) {
+            float ang = ((float)rand() / RAND_MAX) * 2.0f * PI;
+            float spd = (float)(rand() % 380 + 100);
+            Vector2 pVel = { cosf(ang) * spd, sinf(ang) * spd };
+
+            Color blastColors[5] = {
+                Color{ 255, 240, 100, 255 }, // Solar Yellow
+                Color{ 255, 80, 20, 255 },   // Fiery Orange
+                Color{ 236, 72, 153, 255 },  // Hot Magenta
+                Color{ 6, 182, 212, 255 },   // Electric Cyan
+                Color{ 255, 255, 255, 255 }  // White Core
+            };
+            Color pCol = blastColors[rand() % 5];
+            particles.Emit(position, pVel, pCol, (float)(rand() % 6 + 4), (float)(rand() % 50 + 40) / 100.0f);
         }
     }
 
@@ -905,34 +1065,34 @@ public:
 
         for (size_t i = tailSegments.size() - 1; i > 0; --i) {
             float t = (float)i / (float)tailSegments.size();
-            float segR = Lerp(radius * 0.85f, 10.0f, t);
-            Color segCol = Color{ (unsigned char)Lerp(120, 40, t), (unsigned char)Lerp(15, 5, t), (unsigned char)Lerp(30, 10, t), 255 };
+            float segR = Lerp(radius * 0.85f, 12.0f, t);
+            Color segCol = Color{ (unsigned char)Lerp(140, 50, t), (unsigned char)Lerp(20, 5, t), (unsigned char)Lerp(35, 10, t), 255 };
             DrawCircleV(tailSegments[i], segR, segCol);
-            DrawCircleLines((int)tailSegments[i].x, (int)tailSegments[i].y, segR, Color{ 230, 40, 70, 120 });
+            DrawCircleLines((int)tailSegments[i].x, (int)tailSegments[i].y, segR, Color{ 255, 40, 70, 140 });
         }
 
-        DrawCircleGradient((int)position.x, (int)position.y, 75.0f, Color{ 255, 20, 60, 140 }, BLANK);
-        DrawCircleV(position, radius, Color{ 45, 10, 20, 255 });
+        DrawCircleGradient((int)position.x, (int)position.y, 85.0f, Color{ 255, 20, 60, 160 }, BLANK);
+        DrawCircleV(position, radius, Color{ 55, 10, 25, 255 });
         DrawCircleLines((int)position.x, (int)position.y, radius, Color{ 255, 60, 80, 255 });
 
         float jawOpen = sinf(jawAnim) * 0.35f + 0.45f;
-        Vector2 upperMandible = { position.x + cosf(-jawOpen) * 44.0f, position.y + sinf(-jawOpen) * 44.0f };
-        Vector2 lowerMandible = { position.x + cosf(jawOpen) * 44.0f, position.y + sinf(jawOpen) * 44.0f };
+        Vector2 upperMandible = { position.x + cosf(-jawOpen) * 48.0f, position.y + sinf(-jawOpen) * 48.0f };
+        Vector2 lowerMandible = { position.x + cosf(jawOpen) * 48.0f, position.y + sinf(jawOpen) * 48.0f };
 
-        DrawTriangle(position, upperMandible, { position.x + cosf(-jawOpen - 0.2f) * 22.0f, position.y + sinf(-jawOpen - 0.2f) * 22.0f }, Color{ 200, 20, 50, 255 });
-        DrawTriangle(position, lowerMandible, { position.x + cosf(jawOpen + 0.2f) * 22.0f, position.y + sinf(jawOpen + 0.2f) * 22.0f }, Color{ 200, 20, 50, 255 });
+        DrawTriangle(position, upperMandible, { position.x + cosf(-jawOpen - 0.2f) * 24.0f, position.y + sinf(-jawOpen - 0.2f) * 24.0f }, Color{ 220, 20, 60, 255 });
+        DrawTriangle(position, lowerMandible, { position.x + cosf(jawOpen + 0.2f) * 24.0f, position.y + sinf(jawOpen + 0.2f) * 24.0f }, Color{ 220, 20, 60, 255 });
 
-        Vector2 eye1 = { position.x + cosf(-0.4f) * 22.0f, position.y + sinf(-0.4f) * 22.0f };
-        Vector2 eye2 = { position.x + cosf(0.4f) * 22.0f, position.y + sinf(0.4f) * 22.0f };
-        DrawCircleV(eye1, 6.0f, Color{ 255, 240, 50, 255 });
-        DrawCircleV(eye2, 6.0f, Color{ 255, 240, 50, 255 });
-        DrawCircleV(eye1, 2.5f, BLACK);
-        DrawCircleV(eye2, 2.5f, BLACK);
+        Vector2 eye1 = { position.x + cosf(-0.4f) * 24.0f, position.y + sinf(-0.4f) * 24.0f };
+        Vector2 eye2 = { position.x + cosf(0.4f) * 24.0f, position.y + sinf(0.4f) * 24.0f };
+        DrawCircleV(eye1, 7.0f, Color{ 255, 240, 50, 255 });
+        DrawCircleV(eye2, 7.0f, Color{ 255, 240, 50, 255 });
+        DrawCircleV(eye1, 3.0f, BLACK);
+        DrawCircleV(eye2, 3.0f, BLACK);
     }
 };
 
 // ---------------------------------------------------------
-// Player Spaceship Entity (3 Selectable Craft Types)
+// Player Spaceship Entity with Countermeasure Flare Launcher
 // ---------------------------------------------------------
 class PlayerSpaceship : public Entity {
 public:
@@ -950,12 +1110,9 @@ public:
     bool shieldActive;
     bool boosting;
     bool damageControlActive;
+    float flareCooldown;
 
     float visionRadius;
-    float radarPingRadius;
-    bool radarPingActive;
-    float radarPingAlpha;
-
     float distanceTraveled;
     int crystalsCollected;
     int heartsCollected;
@@ -972,15 +1129,15 @@ public:
         velocity = { 0.0f, 0.0f };
         angle = 0.0f;
         radius = 20.0f;
+        flareCooldown = 0.0f;
 
-        // Class stats modifiers
         float hullMod = 1.0f;
         maxEnergy = 100.0f;
         if (type == ShipType::PHANTOM) {
-            maxEnergy = 135.0f; // High capacitor
-            hullMod = 0.85f;    // Lighter armor
+            maxEnergy = 135.0f;
+            hullMod = 0.85f;
         } else if (type == ShipType::DREADNOUGHT) {
-            hullMod = 1.45f;    // Super heavy armor
+            hullMod = 1.45f;
             maxEnergy = 90.0f;
         }
 
@@ -992,9 +1149,6 @@ public:
         boosting = false;
         damageControlActive = false;
         visionRadius = 260.0f;
-        radarPingRadius = 0.0f;
-        radarPingActive = false;
-        radarPingAlpha = 0.0f;
         distanceTraveled = 0.0f;
         crystalsCollected = 0;
         heartsCollected = 0;
@@ -1005,7 +1159,7 @@ public:
     float GetRadius() const override { return radius; }
     bool IsActive() const override { return hull > 0.0f; }
 
-    void ProcessInput(Camera2D &camera, float dt, ParticleSystem &particles, AudioSynthesizer &audio) {
+    void ProcessInput(Camera2D &camera, float dt, std::vector<JetFlare> &flares, ParticleSystem &particles, AudioSynthesizer &audio) {
         Vector2 inputDir = { 0.0f, 0.0f };
         bool hasKeyboardSteering = false;
 
@@ -1024,9 +1178,8 @@ public:
             inputDir.y = mouseNorm.y;
         }
 
-        // Speed modified by ship type
         float baseSpeed = 280.0f;
-        if (type == ShipType::PHANTOM) baseSpeed = 310.0f;
+        if (type == ShipType::PHANTOM)     baseSpeed = 310.0f;
         if (type == ShipType::DREADNOUGHT) baseSpeed = 250.0f;
 
         boosting = false;
@@ -1049,7 +1202,7 @@ public:
             if (!IsSoundPlaying(audio.sndBoost)) PlaySound(audio.sndBoost);
         }
 
-        // ENHANCED POWER: Kinetic Deflector Shield ([E] Key or Middle Mouse Button)
+        // Deflector Shield ([E] or MMB)
         if ((IsKeyDown(KEY_E) || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) && energy > 8.0f) {
             shieldActive = true;
             energy -= 20.0f * dt;
@@ -1058,24 +1211,37 @@ public:
             shieldActive = false;
         }
 
-        // ENHANCED POWER: Active Nanite Damage Control ([Q] or [R] Key)
+        // Nanite Repair ([Q] or [R])
         if ((IsKeyDown(KEY_Q) || IsKeyDown(KEY_R)) && energy > 18.0f && hull < maxHull) {
             damageControlActive = true;
             energy -= 32.0f * dt;
-            hull = fminf(maxHull, hull + 25.0f * dt); // Rapid nanite healing
+            hull = fminf(maxHull, hull + 25.0f * dt);
             particles.Emit(Vector2{ position.x + (rand() % 32 - 16), position.y + (rand() % 32 - 16) }, { 0.0f, -45.0f }, Color{ 34, 211, 238, 255 }, 3.5f, 0.4f);
             if (!IsSoundPlaying(audio.sndRepair) && (rand() % 12 == 0)) PlaySound(audio.sndRepair);
         } else {
             damageControlActive = false;
         }
 
-        // Sensor Radar Ping ([SPACE])
-        if (IsKeyPressed(KEY_SPACE) && energy >= 15.0f && !radarPingActive) {
-            energy -= 15.0f;
-            radarPingActive = true;
-            radarPingRadius = 20.0f;
-            radarPingAlpha = 1.0f;
-            PlaySound(audio.sndPing);
+        // --- FIGHTER JET FLARE LAUNCHER ([SPACE] KEY) ---
+        flareCooldown -= dt;
+        if (IsKeyPressed(KEY_SPACE) && flareCooldown <= 0.0f) {
+            flareCooldown = 0.85f; // Fast countermeasure recharge
+            PlaySound(audio.sndFlare);
+
+            // Deploy 5 glowing countermeasure flares in a backwards spray arc
+            for (int i = 0; i < 5; ++i) {
+                float spreadAngle = angle + PI + ((float)(i - 2) * 0.22f) + ((float)(rand() % 20 - 10) * 0.01f);
+                float flareSpeed = (float)(rand() % 160 + 340);
+
+                JetFlare fl;
+                fl.position = position;
+                fl.velocity = Vector2{ cosf(spreadAngle) * flareSpeed, sinf(spreadAngle) * flareSpeed };
+                fl.radius = 9.0f;
+                fl.life = 1.3f;
+                fl.maxLife = 1.3f;
+                fl.active = true;
+                flares.push_back(fl);
+            }
         }
 
         Vector2 targetVel = Vector2Scale(Vector2Normalize(inputDir), baseSpeed);
@@ -1096,21 +1262,12 @@ public:
             float rechargeMult = (type == ShipType::PHANTOM) ? 16.0f : 12.0f;
             energy = fminf(maxEnergy, energy + rechargeMult * dt);
         }
-
-        if (radarPingActive) {
-            radarPingRadius += 1200.0f * dt;
-            radarPingAlpha -= 1.2f * dt;
-            if (radarPingAlpha <= 0.0f || radarPingRadius > 1400.0f) {
-                radarPingActive = false;
-            }
-        }
     }
 
     void Draw() const override {
         DrawShipGraphics(position, angle, type, boosting, shieldActive);
     }
 
-    // Static ship renderer helper usable for gameplay and in-menu Hangar previews
     static void DrawShipGraphics(Vector2 pos, float ang, ShipType sType, bool isBoosting, bool isShielded) {
         Color glowCol = (sType == ShipType::VALKYRIE) ? Color{ 56, 189, 248, 80 } :
                         (sType == ShipType::PHANTOM)   ? Color{ 74, 222, 128, 80 } : Color{ 251, 146, 60, 80 };
@@ -1124,7 +1281,6 @@ public:
         };
 
         if (sType == ShipType::VALKYRIE) {
-            // [VALKYRIE]: Sleek Cyan Delta Interceptor
             Vector2 nose = Trans(32.0f, 0.0f);
             Vector2 wL   = Trans(-4.0f, -28.0f);
             Vector2 wR   = Trans(-4.0f, 28.0f);
@@ -1141,10 +1297,8 @@ public:
             DrawLineEx(nose, Trans(8.0f, 26.0f), 2.0f, Color{ 56, 189, 248, 255 });
             DrawCircleV(nacL, 4.0f, isBoosting ? Color{ 0, 240, 255, 255 } : Color{ 249, 115, 22, 255 });
             DrawCircleV(nacR, 4.0f, isBoosting ? Color{ 0, 240, 255, 255 } : Color{ 249, 115, 22, 255 });
-
             DrawLineEx(Trans(-3.0f, 0.0f), Trans(14.0f, 0.0f), 5.0f, Color{ 6, 182, 212, 255 });
         } else if (sType == ShipType::PHANTOM) {
-            // [PHANTOM]: Twin-Boom Emerald Stealth Raider
             Vector2 nose = Trans(30.0f, 0.0f);
             Vector2 fL   = Trans(10.0f, -12.0f);
             Vector2 fR   = Trans(10.0f, 12.0f);
@@ -1161,10 +1315,8 @@ public:
             DrawLineEx(nose, bR, 2.5f, Color{ 74, 222, 128, 255 });
             DrawCircleV(bL, 4.5f, Color{ 52, 211, 153, 255 });
             DrawCircleV(bR, 4.5f, Color{ 52, 211, 153, 255 });
-
             DrawCircleV(Trans(6.0f, 0.0f), 4.0f, Color{ 16, 185, 129, 255 });
         } else {
-            // [DREADNOUGHT]: Heavy Amber Citadel Cruiser
             Vector2 nose = Trans(26.0f, 0.0f);
             Vector2 armL = Trans(4.0f, -22.0f);
             Vector2 armR = Trans(4.0f, 22.0f);
@@ -1192,7 +1344,7 @@ public:
 };
 
 // ---------------------------------------------------------
-// HUD & Interface Rendering Class
+// HUD & In-Game Alarm Overlay
 // ---------------------------------------------------------
 class GameHUD {
 public:
@@ -1206,7 +1358,7 @@ public:
         DrawTextEx(font, text, { (float)x, (float)y }, (float)fontSize, 1.0f, color);
     }
 
-    static void Render(Font font, const PlayerSpaceship &player, const VoidLeviathan &monster, const std::vector<std::unique_ptr<HazardBase>> &hazards, float timeRemaining) {
+    static void Render(Font font, const PlayerSpaceship &player, const DeowanMonster &monster, float timeRemaining) {
         DrawRectangle(0, 0, SCREEN_WIDTH, 56, Color{ 16, 22, 36, 245 });
         DrawLine(0, 56, SCREEN_WIDTH, 56, Color{ 48, 65, 98, 255 });
 
@@ -1239,60 +1391,43 @@ public:
         DrawCard(895, 10, 110, 36, Color{ 28, 36, 56, 255 }, Color{ 140, 160, 200, 255 });
         DrawTextBold(font, "[M] MENU", 910, 20, 14, Color{ 190, 215, 245, 255 });
 
-        if (monster.pursuing) {
+        // --- DEOWAN ALARM POP-UP NOTIFICATION ---
+        if (monster.alarmTriggered) {
+            float blink = fabs(sinf((float)GetTime() * 8.0f));
+            int boxW = 540;
+            int boxH = 46;
+            int boxX = SCREEN_WIDTH / 2 - boxW / 2;
+            int boxY = 66;
+
+            DrawRectangleRounded(Rectangle{ (float)boxX, (float)boxY, (float)boxW, (float)boxH }, 0.2f, 6, Color{ 80, 15, 20, 245 });
+            DrawRectangleRoundedLines(Rectangle{ (float)boxX, (float)boxY, (float)boxW, (float)boxH }, 0.2f, 6, 3.0f, Color{ 255, (unsigned char)(50 + blink * 180), 50, 255 });
+
+            const char *alertText = "! ALERT: DEOWAN IS COMING! DEPLOY FLARES [SPACE] !";
+            Vector2 tSize = MeasureTextEx(font, alertText, 17, 1.0f);
+            DrawTextEx(font, alertText, { (float)boxX + (boxW - tSize.x) / 2.0f, (float)boxY + (boxH - tSize.y) / 2.0f }, 17, 1.0f, Color{ 255, 230, 230, 255 });
+        } else if (monster.pursuing) {
             float distToMonster = Vector2Distance(player.position, monster.position);
-            int alertAlpha = (int)(fabs(sinf((float)GetTime() * 6.0f)) * 255.0f);
-            DrawCard(SCREEN_WIDTH / 2 - 230, 68, 460, 34, Color{ 75, 15, 20, 220 }, Color{ 239, 68, 68, (unsigned char)alertAlpha });
-            std::string threatStr = TextFormat("! WARNING: LEVIATHAN PURSUING (%dm) - BOOST [SHIFT/RMB] !", (int)distToMonster);
-            DrawTextBold(font, threatStr.c_str(), SCREEN_WIDTH / 2 - (int)MeasureTextEx(font, threatStr.c_str(), 13, 1.0f).x / 2, 78, 13, Color{ 255, 140, 140, 255 });
+            DrawCard(SCREEN_WIDTH / 2 - 240, 68, 480, 34, Color{ 85, 15, 25, 220 }, Color{ 239, 68, 68, 240 });
+            std::string threatStr = TextFormat("! DEOWAN IN PURSUIT (%dm) - BLAST WITH FLARES [SPACE] !", (int)distToMonster);
+            DrawTextBold(font, threatStr.c_str(), SCREEN_WIDTH / 2 - (int)MeasureTextEx(font, threatStr.c_str(), 13, 1.0f).x / 2, 78, 13, Color{ 255, 160, 160, 255 });
         }
 
+        // Vital gauges & Subsystem key prompts
         int barY = SCREEN_HEIGHT - 95;
-        DrawCard(20, barY - 10, 430, 85, Color{ 16, 22, 36, 245 }, Color{ 48, 65, 98, 255 });
+        DrawCard(20, barY - 10, 460, 85, Color{ 16, 22, 36, 245 }, Color{ 48, 65, 98, 255 });
 
         DrawTextBold(font, "SHIP HULL INTEGRITY", 32, barY + 2, 12, Color{ 215, 230, 250, 255 });
         float hullRatio = player.hull / player.maxHull;
-        DrawRectangle(195, barY, 215, 14, Color{ 30, 42, 60, 255 });
+        DrawRectangle(205, barY, 230, 14, Color{ 30, 42, 60, 255 });
         Color hullCol = (hullRatio > 0.35f) ? Color{ 34, 197, 94, 255 } : Color{ 239, 68, 68, 255 };
-        DrawRectangle(195, barY, (int)(215 * hullRatio), 14, hullCol);
+        DrawRectangle(205, barY, (int)(230 * hullRatio), 14, hullCol);
 
         DrawTextBold(font, "ENERGY CAPACITOR", 32, barY + 24, 12, Color{ 215, 230, 250, 255 });
         float energyRatio = player.energy / player.maxEnergy;
-        DrawRectangle(195, barY + 22, 215, 14, Color{ 30, 42, 60, 255 });
-        DrawRectangle(195, barY + 22, (int)(215 * energyRatio), 14, Color{ 2, 132, 199, 255 });
+        DrawRectangle(205, barY + 22, 230, 14, Color{ 30, 42, 60, 255 });
+        DrawRectangle(205, barY + 22, (int)(230 * energyRatio), 14, Color{ 2, 132, 199, 255 });
 
-        DrawTextBold(font, "[E/MMB] Kinetic Shield  |  [Q/R] Nanite Repair  |  [SHIFT] Boost", 32, barY + 48, 11, Color{ 140, 220, 255, 255 });
-
-        int radarX = SCREEN_WIDTH - 220;
-        int radarY = 70;
-        int radarW = 200;
-        int radarH = 150;
-
-        DrawCard(radarX, radarY, radarW, radarH, Color{ 14, 20, 34, 235 }, Color{ 56, 189, 248, 180 });
-        DrawTextBold(font, "BVR SCANNER", radarX + 12, radarY + 10, 12, Color{ 56, 189, 248, 255 });
-        DrawLine(radarX + 30, radarY + radarH / 2, radarX + radarW - 10, radarY + radarH / 2, Color{ 0, 140, 200, 110 });
-        DrawLine(radarX + 60, radarY + 25, radarX + 60, radarY + radarH - 10, Color{ 0, 140, 200, 110 });
-        DrawCircle(radarX + 60, radarY + radarH / 2, 4.0f, Color{ 34, 211, 238, 255 });
-
-        if (monster.pursuing) {
-            float mdx = monster.position.x - player.position.x;
-            float rX = Clamp(radarX + 60.0f + (mdx / 1400.0f) * (radarW - 55.0f), (float)radarX + 10.0f, (float)radarX + radarW - 10.0f);
-            float mdy = (monster.position.y - player.position.y) * 0.15f;
-            float rY = Clamp(radarY + radarH / 2 + mdy, (float)radarY + 25.0f, (float)radarY + radarH - 12.0f);
-            DrawCircle((int)rX, (int)rY, 6.0f, Color{ 255, 30, 60, 255 });
-            DrawTextBold(font, "BEAST", (int)rX - 16, (int)rY - 14, 10, Color{ 255, 110, 110, 255 });
-        }
-
-        for (const auto &h : hazards) {
-            if (!h->IsActive()) continue;
-            float dx = h->GetPosition().x - player.position.x;
-            if (dx > 0.0f && dx < 1400.0f) {
-                float rX = radarX + 60.0f + (dx / 1400.0f) * (radarW - 75.0f);
-                float dy = (h->GetPosition().y - player.position.y) * 0.15f;
-                float rY = Clamp(radarY + radarH / 2 + dy, (float)radarY + 25.0f, (float)radarY + radarH - 12.0f);
-                DrawCircle((int)rX, (int)rY, 4.0f, RED);
-            }
-        }
+        DrawTextBold(font, "[SPACE] Countermeasure Flares  |  [SHIFT] Boost  |  [E] Shield", 32, barY + 48, 11, Color{ 140, 220, 255, 255 });
     }
 };
 
@@ -1304,11 +1439,13 @@ private:
     GameState state;
     Difficulty difficulty;
     ShipType selectedShip;
+    PassageTheme selectedPassage;
 
     PlayerSpaceship player;
-    VoidLeviathan monster;
+    DeowanMonster monster;
     PassageGenerator passage;
     ParticleSystem particles;
+    std::vector<JetFlare> flares;
     AudioSynthesizer audio;
 
     std::vector<std::unique_ptr<TrapBase>> traps;
@@ -1316,7 +1453,6 @@ private:
     std::vector<std::unique_ptr<HazardBase>> hazards;
 
     Camera2D camera;
-    RenderTexture2D fogTexture;
     Font fontFredokaBold;
     bool fontLoadedCustom = false;
 
@@ -1326,12 +1462,13 @@ private:
     int finalScore;
     std::string gameOverReason;
 
-    // Home Interactive Buttons
+    // Home Command Deck Buttons
     HoverButton btnCadet;
     HoverButton btnCommander;
     HoverButton btnVoidWalker;
     HoverButton btnApocalypse;
     HoverButton btnSelectShip;
+    HoverButton btnSelectPassage;
     HoverButton btnLaunch;
     HoverButton btnAudioToggle;
     HoverButton btnExitGame;
@@ -1341,6 +1478,12 @@ private:
     HoverButton btnShipPhantom;
     HoverButton btnShipDreadnought;
     HoverButton btnShipConfirm;
+
+    // Passage Selection Modal Buttons
+    HoverButton btnPassPale;
+    HoverButton btnPassNeon;
+    HoverButton btnPassVolcanic;
+    HoverButton btnPassConfirm;
 
     // Game Over Buttons
     HoverButton btnReplay;
@@ -1352,6 +1495,7 @@ public:
         state = GameState::TITLE_MENU;
         difficulty = Difficulty::COMMANDER;
         selectedShip = ShipType::VALKYRIE;
+        selectedPassage = PassageTheme::PALE_SANDS;
         timeRemaining = 60.0f;
         hazardSpawnTimer = 3.0f;
         screenShake = 0.0f;
@@ -1359,11 +1503,10 @@ public:
     }
 
     void Init() {
-        InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Lost Passage: Void Runner");
+        InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Lost Passage: DEOWAN Void Runner");
         SetTargetFPS(60);
 
         audio.Init();
-        fogTexture = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
         if (FileExists("Fredoka-Bold.ttf")) {
             fontFredokaBold = LoadFontEx("Fredoka-Bold.ttf", 64, nullptr, 0);
@@ -1387,31 +1530,36 @@ public:
     }
 
     void BuildHomeUI() {
-        // Compact smart difficulty buttons
-        float diffY = 285.0f;
+        float diffY = 275.0f;
         float diffW = 140.0f;
-        float diffH = 46.0f;
+        float diffH = 44.0f;
 
-        btnCadet = { Rectangle{ 310, diffY, diffW, diffH }, "CADET", Color{ 20, 32, 48, 255 }, Color{ 45, 212, 191, 255 }, Color{ 45, 212, 191, 160 }, Color{ 255, 255, 255, 255 }, Color{ 94, 234, 212, 255 }, Color{ 10, 30, 30, 255 } };
-        btnCommander = { Rectangle{ 465, diffY, diffW, diffH }, "CMD", Color{ 20, 32, 48, 255 }, Color{ 56, 189, 248, 255 }, Color{ 56, 189, 248, 160 }, Color{ 255, 255, 255, 255 }, Color{ 186, 230, 253, 255 }, Color{ 10, 25, 45, 255 } };
-        btnVoidWalker = { Rectangle{ 620, diffY, diffW, diffH }, "VOID", Color{ 20, 32, 48, 255 }, Color{ 250, 204, 21, 255 }, Color{ 250, 204, 21, 160 }, Color{ 255, 255, 255, 255 }, Color{ 254, 240, 138, 255 }, Color{ 35, 30, 10, 255 } };
-        btnApocalypse = { Rectangle{ 775, diffY, diffW, diffH }, "APOC", Color{ 20, 32, 48, 255 }, Color{ 239, 68, 68, 255 }, Color{ 239, 68, 68, 160 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 40, 10, 15, 255 } };
+        btnCadet      = { Rectangle{ 310, diffY, diffW, diffH }, "CADET", Color{ 20, 32, 48, 255 }, Color{ 45, 212, 191, 255 }, Color{ 45, 212, 191, 160 }, Color{ 255, 255, 255, 255 }, Color{ 94, 234, 212, 255 }, Color{ 10, 30, 30, 255 } };
+        btnCommander  = { Rectangle{ 465, diffY, diffW, diffH }, "CMD",   Color{ 20, 32, 48, 255 }, Color{ 56, 189, 248, 255 }, Color{ 56, 189, 248, 160 }, Color{ 255, 255, 255, 255 }, Color{ 186, 230, 253, 255 }, Color{ 10, 25, 45, 255 } };
+        btnVoidWalker = { Rectangle{ 620, diffY, diffW, diffH }, "VOID",  Color{ 20, 32, 48, 255 }, Color{ 250, 204, 21, 255 }, Color{ 250, 204, 21, 160 }, Color{ 255, 255, 255, 255 }, Color{ 254, 240, 138, 255 }, Color{ 35, 30, 10, 255 } };
+        btnApocalypse = { Rectangle{ 775, diffY, diffW, diffH }, "APOC",  Color{ 20, 32, 48, 255 }, Color{ 239, 68, 68, 255 }, Color{ 239, 68, 68, 160 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 40, 10, 15, 255 } };
 
-        // Home action buttons
-        btnSelectShip = { Rectangle{ 430, 380, 200, 52 }, "SELECT SHIP", Color{ 30, 28, 55, 255 }, Color{ 168, 85, 247, 255 }, Color{ 168, 85, 247, 200 }, Color{ 255, 255, 255, 255 }, Color{ 233, 213, 255, 255 }, Color{ 25, 10, 45, 255 } };
-        btnLaunch     = { Rectangle{ 650, 380, 200, 52 }, "LAUNCH", Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 220 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
+        btnSelectShip    = { Rectangle{ 330, 375, 190, 50 }, "SELECT SHIP",    Color{ 30, 28, 55, 255 }, Color{ 168, 85, 247, 255 }, Color{ 168, 85, 247, 200 }, Color{ 255, 255, 255, 255 }, Color{ 233, 213, 255, 255 }, Color{ 25, 10, 45, 255 } };
+        btnSelectPassage = { Rectangle{ 545, 375, 190, 50 }, "SELECT PASSAGE", Color{ 25, 45, 45, 255 }, Color{ 20, 184, 166, 255 }, Color{ 20, 184, 166, 200 }, Color{ 255, 255, 255, 255 }, Color{ 204, 251, 241, 255 }, Color{ 10, 35, 30, 255 } };
+        btnLaunch        = { Rectangle{ 760, 375, 190, 50 }, "LAUNCH",         Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 220 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
 
-        btnAudioToggle = { Rectangle{ 430, 450, 200, 40 }, "AUDIO: ON", Color{ 25, 35, 52, 255 }, Color{ 100, 116, 139, 255 }, Color{ 71, 85, 105, 255 }, Color{ 255, 255, 255, 255 }, Color{ 203, 213, 225, 255 }, Color{ 15, 23, 42, 255 } };
-        btnExitGame    = { Rectangle{ 650, 450, 200, 40 }, "EXIT", Color{ 45, 22, 26, 255 }, Color{ 239, 68, 68, 255 }, Color{ 239, 68, 68, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 35, 10, 15, 255 } };
+        btnAudioToggle   = { Rectangle{ 430, 445, 200, 38 }, "AUDIO: ON",      Color{ 25, 35, 52, 255 }, Color{ 100, 116, 139, 255 }, Color{ 71, 85, 105, 255 }, Color{ 255, 255, 255, 255 }, Color{ 203, 213, 225, 255 }, Color{ 15, 23, 42, 255 } };
+        btnExitGame      = { Rectangle{ 650, 445, 200, 38 }, "EXIT",           Color{ 45, 22, 26, 255 }, Color{ 239, 68, 68, 255 }, Color{ 239, 68, 68, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 35, 10, 15, 255 } };
 
         // Ship Selection Modal Buttons
         float shipCardY = 220.0f;
         btnShipValkyrie    = { Rectangle{ 230, shipCardY, 240, 260 }, "VALKYRIE-IX", Color{ 20, 30, 48, 255 }, Color{ 56, 189, 248, 255 }, Color{ 56, 189, 248, 180 }, Color{ 255, 255, 255, 255 }, Color{ 186, 230, 253, 255 }, Color{ 15, 23, 42, 255 } };
         btnShipPhantom     = { Rectangle{ 520, shipCardY, 240, 260 }, "PHANTOM",     Color{ 18, 38, 30, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 180 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
         btnShipDreadnought = { Rectangle{ 810, shipCardY, 240, 260 }, "DREADNOUGHT", Color{ 42, 28, 18, 255 }, Color{ 245, 158, 11, 255 }, Color{ 245, 158, 11, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 240, 138, 255 }, Color{ 35, 20, 10, 255 } };
-        btnShipConfirm     = { Rectangle{ SCREEN_WIDTH / 2 - 120, 520, 240, 50 }, "CONFIRM SHIP", Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 255 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
+        btnShipConfirm     = { Rectangle{ SCREEN_WIDTH / 2 - 120, 515, 240, 48 }, "CONFIRM SHIP", Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 255 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
 
-        // Game Over Buttons
+        // Passage Selection Modal Buttons
+        btnPassPale        = { Rectangle{ 230, shipCardY, 240, 260 }, "PALE SANDS",     Color{ 45, 40, 25, 255 }, Color{ 250, 204, 21, 255 }, Color{ 250, 204, 21, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 240, 138, 255 }, Color{ 35, 25, 10, 255 } };
+        btnPassNeon        = { Rectangle{ 520, shipCardY, 240, 260 }, "NEON VOID",      Color{ 25, 18, 42, 255 }, Color{ 236, 72, 153, 255 }, Color{ 6, 182, 212, 180 }, Color{ 255, 255, 255, 255 }, Color{ 244, 114, 182, 255 }, Color{ 25, 10, 30, 255 } };
+        btnPassVolcanic    = { Rectangle{ 810, shipCardY, 240, 260 }, "VOLCANIC ABYSS", Color{ 48, 18, 18, 255 }, Color{ 249, 115, 22, 255 }, Color{ 239, 68, 68, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 35, 10, 10, 255 } };
+        btnPassConfirm     = { Rectangle{ SCREEN_WIDTH / 2 - 120, 515, 240, 48 }, "CONFIRM PASSAGE", Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 255 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
+
+        // Game Over Dialog Buttons
         int dialogX = SCREEN_WIDTH / 2 - 280;
         int dialogY = SCREEN_HEIGHT / 2 - 200;
         int btnW = 150;
@@ -1425,7 +1573,6 @@ public:
 
     void Shutdown() {
         if (fontLoadedCustom) UnloadFont(fontFredokaBold);
-        UnloadRenderTexture(fogTexture);
         audio.Close();
         CloseWindow();
     }
@@ -1441,8 +1588,9 @@ public:
 
         player.Reset(startHull, selectedShip);
         monster.Reset();
-        passage.Generate(difficulty);
+        passage.Generate(difficulty, selectedPassage);
         particles.Clear();
+        flares.clear();
 
         traps.clear();
         pickups.clear();
@@ -1503,16 +1651,15 @@ public:
 
     void Update(float dt) {
         float threat = 0.0f;
-        if (monster.pursuing) {
-            threat = Clamp(1.0f - (Vector2Distance(player.position, monster.position) / 900.0f), 0.0f, 1.0f);
+        if (monster.pursuing || monster.alarmTriggered) {
+            float dist = Vector2Distance(player.position, monster.position);
+            threat = Clamp(1.0f - (dist / 950.0f), 0.35f, 1.0f);
         }
         audio.UpdateBGM(state == GameState::PLAYING, threat);
 
         bool isHovering = false;
 
-        // -----------------------------------------------------
-        // Title Screen & Hangar Modal Interactions
-        // -----------------------------------------------------
+        // Navigation in Home & Modals
         if (state == GameState::TITLE_MENU) {
             btnCadet.selected      = (difficulty == Difficulty::CADET);
             btnCommander.selected  = (difficulty == Difficulty::COMMANDER);
@@ -1520,7 +1667,7 @@ public:
             btnApocalypse.selected = (difficulty == Difficulty::APOCALYPSE);
 
             if (btnCadet.IsHovered() || btnCommander.IsHovered() || btnVoidWalker.IsHovered() || btnApocalypse.IsHovered() ||
-                btnSelectShip.IsHovered() || btnLaunch.IsHovered() || btnAudioToggle.IsHovered() || btnExitGame.IsHovered()) {
+                btnSelectShip.IsHovered() || btnSelectPassage.IsHovered() || btnLaunch.IsHovered() || btnAudioToggle.IsHovered() || btnExitGame.IsHovered()) {
                 isHovering = true;
             }
 
@@ -1529,10 +1676,8 @@ public:
             if (btnVoidWalker.IsClicked()) difficulty = Difficulty::VOID_WALKER;
             if (btnApocalypse.IsClicked()) difficulty = Difficulty::APOCALYPSE;
 
-            if (btnSelectShip.IsClicked()) {
-                state = GameState::SHIP_SELECT_MODAL;
-                return;
-            }
+            if (btnSelectShip.IsClicked())    { state = GameState::SHIP_SELECT_MODAL; return; }
+            if (btnSelectPassage.IsClicked()) { state = GameState::PASSAGE_SELECT_MODAL; return; }
 
             if (btnAudioToggle.IsClicked()) {
                 audio.muted = !audio.muted;
@@ -1544,7 +1689,7 @@ public:
                 exit(0);
             }
 
-            if (btnLaunch.IsClicked() || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+            if (btnLaunch.IsClicked() || IsKeyPressed(KEY_ENTER)) {
                 ResetGame();
                 state = GameState::PLAYING;
                 return;
@@ -1562,16 +1707,28 @@ public:
             if (btnShipPhantom.IsClicked())     selectedShip = ShipType::PHANTOM;
             if (btnShipDreadnought.IsClicked()) selectedShip = ShipType::DREADNOUGHT;
 
-            if (btnShipConfirm.IsClicked() || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+            if (btnShipConfirm.IsClicked() || IsKeyPressed(KEY_ENTER)) {
                 state = GameState::TITLE_MENU;
                 return;
             }
-        }
+        } else if (state == GameState::PASSAGE_SELECT_MODAL) {
+            btnPassPale.selected     = (selectedPassage == PassageTheme::PALE_SANDS);
+            btnPassNeon.selected     = (selectedPassage == PassageTheme::NEON_VOID);
+            btnPassVolcanic.selected = (selectedPassage == PassageTheme::VOLCANIC_ABYSS);
 
-        // -----------------------------------------------------
-        // Game Over Dialog Buttons
-        // -----------------------------------------------------
-        if (state == GameState::GAME_OVER) {
+            if (btnPassPale.IsHovered() || btnPassNeon.IsHovered() || btnPassVolcanic.IsHovered() || btnPassConfirm.IsHovered()) {
+                isHovering = true;
+            }
+
+            if (btnPassPale.IsClicked())     selectedPassage = PassageTheme::PALE_SANDS;
+            if (btnPassNeon.IsClicked())     selectedPassage = PassageTheme::NEON_VOID;
+            if (btnPassVolcanic.IsClicked()) selectedPassage = PassageTheme::VOLCANIC_ABYSS;
+
+            if (btnPassConfirm.IsClicked() || IsKeyPressed(KEY_ENTER)) {
+                state = GameState::TITLE_MENU;
+                return;
+            }
+        } else if (state == GameState::GAME_OVER) {
             if (btnReplay.IsHovered() || btnHome.IsHovered() || btnExit.IsHovered()) {
                 isHovering = true;
             }
@@ -1606,7 +1763,7 @@ public:
         }
 
         if (state == GameState::SECTOR_CLEARED) {
-            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_R) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_R) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 ResetGame();
                 state = GameState::PLAYING;
             }
@@ -1627,8 +1784,31 @@ public:
             return;
         }
 
-        player.ProcessInput(camera, dt, particles, audio);
+        player.ProcessInput(camera, dt, flares, particles, audio);
         player.Update(dt, particles, audio);
+
+        // --- UPDATE COUNTERMEASURE FLARES & DETECT DEOWAN BLAST ---
+        for (size_t i = 0; i < flares.size();) {
+            flares[i].life -= dt;
+            if (flares[i].life <= 0.0f || !flares[i].active) {
+                flares.erase(flares.begin() + i);
+            } else {
+                flares[i].position = Vector2Add(flares[i].position, Vector2Scale(flares[i].velocity, dt));
+                flares[i].velocity = Vector2Scale(flares[i].velocity, 0.96f); // Air resistance
+
+                // Spark trails
+                particles.Emit(flares[i].position, Vector2{ (float)(rand() % 40 - 20), (float)(rand() % 40 - 20) }, Color{ 255, 220, 80, 255 }, 3.5f, 0.25f);
+
+                // Flare collision with DEOWAN
+                if (monster.pursuing && Vector2Distance(flares[i].position, monster.position) < (flares[i].radius + monster.radius + 15.0f)) {
+                    flares[i].active = false;
+                    monster.BlastByFlares(particles, audio);
+                    screenShake = 1.3f; // Heavy screen blast shake
+                    finalScore += 1500; // Countermeasure victory bonus!
+                }
+                ++i;
+            }
+        }
 
         PassageSlice currentSlice = passage.GetSliceAt(player.position.x);
         if (player.position.y - player.radius < currentSlice.ceilingY()) {
@@ -1644,7 +1824,7 @@ public:
         monster.FollowPlayer(player.position, monsterSpeed, dt);
 
         if (monster.pursuing && Vector2Distance(player.position, monster.position) < (player.radius + monster.radius - 8.0f)) {
-            TriggerGameOver("DEVOUR-KILL BY VOID LEVIATHAN - OUTRUN FAILED");
+            TriggerGameOver("DEVOUR-KILL BY DEOWAN - JET CRUSHED");
             return;
         }
 
@@ -1720,8 +1900,8 @@ public:
         camera.target.y = player.position.y;
         if (screenShake > 0.0f) {
             screenShake -= dt * 18.0f;
-            camera.offset.x = SCREEN_WIDTH * 0.30f + (rand() % 20 - 10) * screenShake;
-            camera.offset.y = SCREEN_HEIGHT * 0.50f + (rand() % 20 - 10) * screenShake;
+            camera.offset.x = SCREEN_WIDTH * 0.30f + (rand() % 24 - 12) * screenShake;
+            camera.offset.y = SCREEN_HEIGHT * 0.50f + (rand() % 24 - 12) * screenShake;
         } else {
             camera.offset = Vector2{ (float)SCREEN_WIDTH * 0.30f, (float)SCREEN_HEIGHT * 0.50f };
         }
@@ -1729,15 +1909,14 @@ public:
 
     void ApplyDamage(float dmg) {
         if (player.shieldActive) {
-            // Enhanced Kinetic Deflector: 85% kinetic negation
             player.energy = fmaxf(0.0f, player.energy - dmg * 0.6f);
             player.hull -= dmg * 0.15f;
             PlaySound(audio.sndShield);
-            screenShake = 0.3f;
+            screenShake = 0.35f;
         } else {
             player.hull -= dmg;
             PlaySound(audio.sndHit);
-            screenShake = 0.8f;
+            screenShake = 0.85f;
         }
 
         if (player.hull <= 0.0f) {
@@ -1755,11 +1934,15 @@ public:
 
     void Draw() {
         BeginDrawing();
-        ClearBackground(PATH_BG_PALE_YELLOW);
+        
+        Color bgClear = (selectedPassage == PassageTheme::PALE_SANDS) ? Color{ 253, 250, 228, 255 } :
+                        (selectedPassage == PassageTheme::NEON_VOID)  ? Color{ 14, 10, 26, 255 } : Color{ 28, 10, 10, 255 };
+        ClearBackground(bgClear);
 
-        if (state == GameState::TITLE_MENU || state == GameState::SHIP_SELECT_MODAL) {
+        if (state == GameState::TITLE_MENU || state == GameState::SHIP_SELECT_MODAL || state == GameState::PASSAGE_SELECT_MODAL) {
             DrawTitleScreen();
-            if (state == GameState::SHIP_SELECT_MODAL) DrawShipSelectModal();
+            if (state == GameState::SHIP_SELECT_MODAL)    DrawShipSelectModal();
+            if (state == GameState::PASSAGE_SELECT_MODAL) DrawPassageSelectModal();
             EndDrawing();
             return;
         }
@@ -1771,14 +1954,19 @@ public:
         for (const auto &t : traps)   t->Draw();
         for (const auto &h : hazards) h->Draw();
 
+        // Draw Active Countermeasure Flares
+        for (const auto &fl : flares) {
+            DrawCircleGradient((int)fl.position.x, (int)fl.position.y, fl.radius * 2.8f, Color{ 255, 230, 80, 220 }, BLANK);
+            DrawCircleV(fl.position, fl.radius, Color{ 255, 120, 20, 255 });
+            DrawCircleV(fl.position, fl.radius * 0.5f, RAYWHITE);
+        }
+
         monster.Draw();
         particles.Draw();
         player.Draw();
         EndMode2D();
 
-        DrawDynamicFog();
-
-        GameHUD::Render(fontFredokaBold, player, monster, hazards, timeRemaining);
+        GameHUD::Render(fontFredokaBold, player, monster, timeRemaining);
 
         if (state == GameState::PAUSED) {
             DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 8, 14, 26, 200 });
@@ -1794,112 +1982,100 @@ public:
         EndDrawing();
     }
 
-    void DrawDynamicFog() {
-        BeginTextureMode(fogTexture);
-        ClearBackground(Color{ 45, 40, 25, 210 });
-
-        Vector2 screenPlayer = GetWorldToScreen2D(player.position, camera);
-        float vR = player.visionRadius + (player.boosting ? 45.0f : 0.0f);
-        DrawCircleGradient((int)screenPlayer.x, (int)screenPlayer.y, vR, BLANK, Color{ 45, 40, 25, 210 });
-
-        if (player.radarPingActive) {
-            DrawCircleLines((int)screenPlayer.x, (int)screenPlayer.y, player.radarPingRadius, Color{ 0, 255, 200, (unsigned char)(player.radarPingAlpha * 255.0f) });
-        }
-
-        if (monster.pursuing) {
-            Vector2 screenMonster = GetWorldToScreen2D(monster.position, camera);
-            DrawCircleGradient((int)screenMonster.x, (int)screenMonster.y, 110.0f, BLANK, Color{ 45, 40, 25, 210 });
-        }
-
-        for (const auto &p : pickups) {
-            if (!p->IsActive()) continue;
-            Vector2 sc = GetWorldToScreen2D(p->GetPosition(), camera);
-            DrawCircleGradient((int)sc.x, (int)sc.y, 50.0f, BLANK, Color{ 45, 40, 25, 210 });
-        }
-
-        EndTextureMode();
-        DrawTextureRec(fogTexture.texture, Rectangle{ 0.0f, 0.0f, (float)SCREEN_WIDTH, -(float)SCREEN_HEIGHT }, Vector2{ 0.0f, 0.0f }, WHITE);
-    }
-
-    // ---------------------------------------------------------
-    // Redesigned Clean Home UI (Smart Buttons & Grid)
-    // ---------------------------------------------------------
     void DrawTitleScreen() {
-        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, PATH_BG_PALE_YELLOW);
+        Color titleBg = (selectedPassage == PassageTheme::PALE_SANDS) ? Color{ 253, 250, 228, 255 } :
+                        (selectedPassage == PassageTheme::NEON_VOID)  ? Color{ 16, 12, 28, 255 } : Color{ 30, 12, 12, 255 };
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, titleBg);
 
-        for (int x = 0; x < SCREEN_WIDTH; x += 60) DrawLine(x, 0, x, SCREEN_HEIGHT, Color{ 235, 220, 175, 110 });
-        for (int y = 0; y < SCREEN_HEIGHT; y += 60) DrawLine(0, y, SCREEN_WIDTH, y, Color{ 235, 220, 175, 110 });
+        for (int x = 0; x < SCREEN_WIDTH; x += 60) DrawLine(x, 0, x, SCREEN_HEIGHT, Color{ 180, 180, 200, 40 });
+        for (int y = 0; y < SCREEN_HEIGHT; y += 60) DrawLine(0, y, SCREEN_WIDTH, y, Color{ 180, 180, 200, 40 });
 
-        // Header Banner
-        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 50, 760, 120, Color{ 20, 28, 44, 250 }, Color{ 56, 189, 248, 255 });
-        GameHUD::DrawTextBold(fontFredokaBold, "THE LOST PASSAGE: VOID RUNNER", SCREEN_WIDTH / 2 - 250, 75, 34, Color{ 240, 249, 255, 255 });
-        GameHUD::DrawTextBold(fontFredokaBold, "TACTICAL JET FLIGHT SIMULATOR · RAYLIB C++ ENGINE", SCREEN_WIDTH / 2 - 180, 130, 14, Color{ 56, 189, 248, 255 });
+        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 45, 760, 115, Color{ 20, 28, 44, 250 }, Color{ 56, 189, 248, 255 });
+        GameHUD::DrawTextBold(fontFredokaBold, "THE LOST PASSAGE: DEOWAN", SCREEN_WIDTH / 2 - 230, 68, 34, Color{ 240, 249, 255, 255 });
+        GameHUD::DrawTextBold(fontFredokaBold, "COUNTERMEASURE JET RUNNER · PROCEDURAL SYNTH ENGINE", SCREEN_WIDTH / 2 - 200, 120, 14, Color{ 56, 189, 248, 255 });
 
-        // Main Home Command Deck Card
-        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 195, 760, 325, Color{ 16, 24, 38, 245 }, Color{ 50, 70, 105, 255 });
+        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 180, 760, 335, Color{ 16, 24, 38, 245 }, Color{ 50, 70, 105, 255 });
 
-        // Difficulty Selection Header
-        GameHUD::DrawTextBold(fontFredokaBold, "OPERATIONAL DIFFICULTY", SCREEN_WIDTH / 2 - 95, 220, 16, Color{ 203, 213, 225, 255 });
+        GameHUD::DrawTextBold(fontFredokaBold, "MISSION DIFFICULTY", SCREEN_WIDTH / 2 - 80, 205, 16, Color{ 203, 213, 225, 255 });
         std::string diffDesc = (difficulty == Difficulty::CADET) ? "Cadet: 160 HP, 90s Timer, Wide Caverns" :
                                (difficulty == Difficulty::COMMANDER) ? "Commander: 100 HP, 60s Timer, Standard Traps" :
                                (difficulty == Difficulty::VOID_WALKER) ? "Void Walker: 70 HP, 45s Timer, Fast Hazards" :
                                "Apocalypse: 50 HP, 35s Timer, Swarm Barrage";
-        DrawTextEx(fontFredokaBold, diffDesc.c_str(), { (float)SCREEN_WIDTH / 2.0f - MeasureTextEx(fontFredokaBold, diffDesc.c_str(), 13, 1.0f).x / 2.0f, 250 }, 13, 1.0f, Color{ 148, 163, 184, 255 });
+        DrawTextEx(fontFredokaBold, diffDesc.c_str(), { (float)SCREEN_WIDTH / 2.0f - MeasureTextEx(fontFredokaBold, diffDesc.c_str(), 13, 1.0f).x / 2.0f, 235 }, 13, 1.0f, Color{ 148, 163, 184, 255 });
 
-        // Draw 4 Compact Difficulty Buttons
         btnCadet.Draw(fontFredokaBold, 15);
         btnCommander.Draw(fontFredokaBold, 15);
         btnVoidWalker.Draw(fontFredokaBold, 15);
         btnApocalypse.Draw(fontFredokaBold, 15);
 
-        // Active Space Ship Profile Preview
-        std::string sName = (selectedShip == ShipType::VALKYRIE) ? "ACTIVE CRAFT: VALKYRIE-IX (BALANCED)" :
-                            (selectedShip == ShipType::PHANTOM)   ? "ACTIVE CRAFT: PHANTOM (HIGH SPEED)" : "ACTIVE CRAFT: DREADNOUGHT-V (HEAVY ARMOR)";
-        Color sCol = (selectedShip == ShipType::VALKYRIE) ? Color{ 56, 189, 248, 255 } :
-                     (selectedShip == ShipType::PHANTOM)   ? Color{ 74, 222, 128, 255 } : Color{ 251, 146, 60, 255 };
+        // Status of Selected Ship & Passage
+        std::string sName = (selectedShip == ShipType::VALKYRIE) ? "CRAFT: VALKYRIE-IX (AZURE INTERCEPTOR)" :
+                            (selectedShip == ShipType::PHANTOM)   ? "CRAFT: PHANTOM (STEALTH RAIDER)" : "CRAFT: DREADNOUGHT-V (HEAVY CRUISER)";
+        std::string pName = (selectedPassage == PassageTheme::PALE_SANDS) ? "REALM: PALE SANDS" :
+                            (selectedPassage == PassageTheme::NEON_VOID)  ? "REALM: NEON CYBER VOID" : "REALM: VOLCANIC ABYSS";
 
-        DrawTextEx(fontFredokaBold, sName.c_str(), { (float)SCREEN_WIDTH / 2.0f - MeasureTextEx(fontFredokaBold, sName.c_str(), 14, 1.0f).x / 2.0f, 348 }, 14, 1.0f, sCol);
+        DrawTextEx(fontFredokaBold, sName.c_str(), { (float)SCREEN_WIDTH / 2 - 320, 340 }, 13, 1.0f, Color{ 56, 189, 248, 255 });
+        DrawTextEx(fontFredokaBold, pName.c_str(), { (float)SCREEN_WIDTH / 2 + 80, 340 }, 13, 1.0f, Color{ 245, 158, 11, 255 });
 
-        // Core Action Buttons
-        btnSelectShip.Draw(fontFredokaBold, 16);
+        btnSelectShip.Draw(fontFredokaBold, 15);
+        btnSelectPassage.Draw(fontFredokaBold, 14);
         btnLaunch.Draw(fontFredokaBold, 18);
         btnAudioToggle.Draw(fontFredokaBold, 14);
         btnExitGame.Draw(fontFredokaBold, 15);
 
-        // Quick Controls Footer
-        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 535, 760, 100, Color{ 20, 28, 44, 245 }, Color{ 48, 65, 98, 255 });
-        GameHUD::DrawTextBold(fontFredokaBold, "SUBSYSTEM CONTROLS", SCREEN_WIDTH / 2 - 80, 545, 14, Color{ 56, 189, 248, 255 });
-        DrawTextEx(fontFredokaBold, "- STEER: WASD / Arrow Keys OR Cursor Drag  |  SPRINT / BOOST: Hold [LEFT SHIFT] or [RMB]", { (float)SCREEN_WIDTH / 2 - 340, 570 }, 12, 1.0f, RAYWHITE);
-        DrawTextEx(fontFredokaBold, "- KINETIC SHIELD: Hold [E] or [MMB]  |  NANITE DAMAGE CONTROL: Hold [Q] or [R] (Repairs Hull)", { (float)SCREEN_WIDTH / 2 - 340, 592 }, 12, 1.0f, Color{ 148, 163, 184, 255 });
-        DrawTextEx(fontFredokaBold, "- RECON RADAR: Press [SPACE]  |  COLLECT: Chrono-Crystals (+5s) and Red Hearts (+30 HP)", { (float)SCREEN_WIDTH / 2 - 340, 614 }, 12, 1.0f, Color{ 250, 204, 21, 255 });
+        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 530, 760, 100, Color{ 20, 28, 44, 245 }, Color{ 48, 65, 98, 255 });
+        GameHUD::DrawTextBold(fontFredokaBold, "DEOWAN TACTICAL DEFENSE BRIEFING", SCREEN_WIDTH / 2 - 140, 540, 14, Color{ 255, 90, 90, 255 });
+        DrawTextEx(fontFredokaBold, "- MONSTER WARNING: Watch for DEOWAN's Siren Alarm pop-up alert!", { (float)SCREEN_WIDTH / 2 - 340, 565 }, 12, 1.0f, Color{ 254, 202, 202, 255 });
+        DrawTextEx(fontFredokaBold, "- FLARE BLAST: Press [SPACE] to launch Jet Countermeasure Flares to blow up DEOWAN!", { (float)SCREEN_WIDTH / 2 - 340, 587 }, 12, 1.0f, Color{ 250, 204, 21, 255 });
+        DrawTextEx(fontFredokaBold, "- PROPULSION: [WASD / Mouse] Steer | [SHIFT] Boost | [E] Kinetic Shield | [Q] Nanite Repair", { (float)SCREEN_WIDTH / 2 - 340, 609 }, 12, 1.0f, Color{ 148, 163, 184, 255 });
     }
 
-    // ---------------------------------------------------------
-    // Ship Selection Hangar Modal
-    // ---------------------------------------------------------
     void DrawShipSelectModal() {
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 10, 14, 24, 230 });
 
-        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 470, 100, 940, 500, Color{ 15, 23, 42, 252 }, Color{ 168, 85, 247, 255 });
-        GameHUD::DrawTextBold(fontFredokaBold, "STARFLEET HANGAR - SELECT YOUR CRAFT", SCREEN_WIDTH / 2 - 220, 130, 24, Color{ 240, 249, 255, 255 });
-        DrawTextEx(fontFredokaBold, "Choose a ship calibrated for your tactical playstyle", { (float)SCREEN_WIDTH / 2 - 150, 165 }, 13, 1.0f, Color{ 192, 132, 252, 255 });
+        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 470, 100, 940, 490, Color{ 15, 23, 42, 252 }, Color{ 168, 85, 247, 255 });
+        GameHUD::DrawTextBold(fontFredokaBold, "STARFLEET HANGAR - SELECT CRAFT", SCREEN_WIDTH / 2 - 200, 125, 24, Color{ 240, 249, 255, 255 });
 
-        // Ship 1: Valkyrie-IX
         btnShipValkyrie.Draw(fontFredokaBold, 16);
         PlayerSpaceship::DrawShipGraphics(Vector2{ 350, 310 }, -PI / 2.0f, ShipType::VALKYRIE, false, false);
-        DrawTextEx(fontFredokaBold, "Class: Interceptor\nArmor: Standard\nEnergy: Balanced\nTop Speed: 530 px/s", { 260, 395 }, 12, 1.0f, Color{ 186, 230, 253, 255 });
+        DrawTextEx(fontFredokaBold, "Class: Interceptor\nArmor: Standard\nTop Speed: 530 px/s\nCountermeasure: 5-Flare", { 260, 395 }, 12, 1.0f, Color{ 186, 230, 253, 255 });
 
-        // Ship 2: Phantom
         btnShipPhantom.Draw(fontFredokaBold, 16);
         PlayerSpaceship::DrawShipGraphics(Vector2{ 640, 310 }, -PI / 2.0f, ShipType::PHANTOM, false, false);
-        DrawTextEx(fontFredokaBold, "Class: Stealth Raider\nArmor: Lightweight\nEnergy: 135% Capacitor\nTop Speed: 590 px/s", { 550, 395 }, 12, 1.0f, Color{ 187, 247, 208, 255 });
+        DrawTextEx(fontFredokaBold, "Class: Stealth Raider\nArmor: Lightweight\nTop Speed: 590 px/s\nCapacitor: +35% Energy", { 550, 395 }, 12, 1.0f, Color{ 187, 247, 208, 255 });
 
-        // Ship 3: Dreadnought
         btnShipDreadnought.Draw(fontFredokaBold, 16);
         PlayerSpaceship::DrawShipGraphics(Vector2{ 930, 310 }, -PI / 2.0f, ShipType::DREADNOUGHT, false, false);
-        DrawTextEx(fontFredokaBold, "Class: Heavy Cruiser\nArmor: Reinforced (+45%)\nEnergy: Standard\nTop Speed: 475 px/s", { 840, 395 }, 12, 1.0f, Color{ 254, 240, 138, 255 });
+        DrawTextEx(fontFredokaBold, "Class: Heavy Cruiser\nArmor: Reinforced (+45%)\nTop Speed: 475 px/s\nDeflector: Reinforced", { 840, 395 }, 12, 1.0f, Color{ 254, 240, 138, 255 });
 
         btnShipConfirm.Draw(fontFredokaBold, 18);
+    }
+
+    void DrawPassageSelectModal() {
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 10, 14, 24, 230 });
+
+        GameHUD::DrawCard(SCREEN_WIDTH / 2 - 470, 100, 940, 490, Color{ 15, 23, 42, 252 }, Color{ 20, 184, 166, 255 });
+        GameHUD::DrawTextBold(fontFredokaBold, "REALM CARTOGRAPHY - SELECT PASSAGE", SCREEN_WIDTH / 2 - 230, 125, 24, Color{ 240, 249, 255, 255 });
+
+        // Passage 1: Pale Sands
+        btnPassPale.Draw(fontFredokaBold, 16);
+        DrawRectangle(250, 275, 200, 90, Color{ 253, 250, 228, 255 });
+        DrawLineEx({ 250, 320 }, { 450, 320 }, 4.0f, Color{ 255, 232, 110, 255 });
+        DrawTextEx(fontFredokaBold, "Terrain: Sandstone Cavern\nTheme: Pale Warm Yellow\nLighting: High Visibility\nAtmosphere: Clear", { 260, 395 }, 12, 1.0f, Color{ 254, 240, 138, 255 });
+
+        // Passage 2: Neon Void
+        btnPassNeon.Draw(fontFredokaBold, 16);
+        DrawRectangle(540, 275, 200, 90, Color{ 16, 12, 28, 255 });
+        DrawLineEx({ 540, 320 }, { 740, 320 }, 4.0f, Color{ 236, 72, 153, 255 });
+        DrawTextEx(fontFredokaBold, "Terrain: Obsidian Trench\nTheme: Cyberpunk Violet\nLighting: Electric Cyan Rails\nAtmosphere: Digital Mist", { 550, 395 }, 12, 1.0f, Color{ 244, 114, 182, 255 });
+
+        // Passage 3: Volcanic Abyss
+        btnPassVolcanic.Draw(fontFredokaBold, 16);
+        DrawRectangle(830, 275, 200, 90, Color{ 36, 12, 12, 255 });
+        DrawLineEx({ 830, 320 }, { 1030, 320 }, 4.0f, Color{ 249, 115, 22, 255 });
+        DrawTextEx(fontFredokaBold, "Terrain: Basalt Rift\nTheme: Molten Lava Abyss\nLighting: Fiery Red Rims\nAtmosphere: Smoke & Ash", { 840, 395 }, 12, 1.0f, Color{ 254, 202, 202, 255 });
+
+        btnPassConfirm.Draw(fontFredokaBold, 18);
     }
 
     void DrawGameOverDialog() {
