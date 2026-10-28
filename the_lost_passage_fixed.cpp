@@ -1,17 +1,24 @@
 /*******************************************************************************************
 *
-*   THE LOST PASSAGE: DEOWAN VOID RUNNER (Raylib C++17)
+*   THE LOST PASSAGE: DEOWAN VOID RUNNER - Settings & Hill Climb Racing BGM Edition (Raylib C++17)
 *
-*   New Features:
-*     - Monster "DEOWAN" with an Audio/Visual Alarm Warning Pop-up
-*     - Fighter Jet Flare Defense System: Press [SPACE] to launch glowing flares
-*     - DEOWAN Detonation: Flares blast DEOWAN into a colorful particle explosion with custom SFX
-*     - Hard In-Game Music: Real-time hard-hitting industrial techno / darksynth BGM engine
-*     - 3 Distinct Passage Environments:
-*         [1] PALE SANDS (Bright Pale Yellow Runway & Golden Rims)
-*         [2] NEON VOID (Cyberpunk Obsidian, Electric Cyan & Hot Pink Laser Rails)
-*         [3] VOLCANIC ABYSS (Basalt Rock, Pulsing Magma & Fiery Molten Rims)
-*     - Preserves 3 Ship Classes, Modern Home UI, Fredoka Bold Game Over Dialog & Mouse Controls
+*   Features:
+*     - In-Game Pause Button [ || ] on HUD + [P] / [ESC] key with interactive Pause Dialog
+*     - Full-time Hill Climb Racing procedural background music synthesizer
+*     - Home & Pause Settings Menu with independent BGM and SFX On/Off toggles
+*     - DEOWAN monster with early alarm siren & alert popup
+*     - Countermeasure flare defense [SPACE] to blast DEOWAN into colorful particle shockwaves
+*     - 3 selectable space ships & 3 distinct passage realms
+*     - Full mouse hover effects, Fredoka Bold typography & hybrid controls
+*
+*   Compile on Windows (cmd.exe / MinGW / w64devkit):
+*     g++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -lopengl32 -lgdi32 -lwinmm -o lost_passage.exe
+*
+*   Compile on Linux:
+*     g++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -o lost_passage
+*
+*   Compile on macOS:
+*     clang++ -O2 -std=c++17 the_lost_passage_raylib.cpp -lraylib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -o lost_passage
 *
 ********************************************************************************************/
 
@@ -33,7 +40,7 @@
 #include <iomanip>
 
 // ---------------------------------------------------------
-// Global Constants & Passage Themes
+// Global Constants & Enums
 // ---------------------------------------------------------
 const int SCREEN_WIDTH  = 1280;
 const int SCREEN_HEIGHT = 720;
@@ -42,6 +49,7 @@ enum class GameState {
     TITLE_MENU,
     SHIP_SELECT_MODAL,
     PASSAGE_SELECT_MODAL,
+    SETTINGS_MODAL,
     PLAYING,
     PAUSED,
     GAME_OVER,
@@ -174,7 +182,7 @@ public:
 };
 
 // ---------------------------------------------------------
-// Procedural Audio Engine with Hard Combat Music Synthesizer
+// Procedural Audio Engine: Hill Climb Racing BGM & SFX
 // ---------------------------------------------------------
 class AudioSynthesizer {
 public:
@@ -194,7 +202,10 @@ public:
     AudioStream bgmStream;
     float bgmTime = 0.0f;
     bool bgmPlaying = false;
-    bool muted = false;
+
+    // Independent Audio Controls
+    bool bgmEnabled = true;
+    bool sfxEnabled = true;
 
     void Init() {
         InitAudioDevice();
@@ -217,70 +228,107 @@ public:
         bgmPlaying = true;
     }
 
-    // Heavy, Hard-Hitting Combat Synth BGM Engine
-    void UpdateBGM(bool inGame, float threatIntensity) {
+    void PlaySFX(Sound s) {
+        if (sfxEnabled) {
+            PlaySound(s);
+        }
+    }
+
+    // Procedural Hill Climb Racing Bouncy Theme Synthesizer
+    void UpdateBGM() {
         if (!bgmPlaying || !IsAudioStreamProcessed(bgmStream)) return;
 
         const int sampleCount = 4096;
         short buffer[sampleCount];
         float sampleRate = 44100.0f;
 
-        // 138 BPM hard-tempo clock
-        float beatDuration = 60.0f / 138.0f;
+        if (!bgmEnabled) {
+            for (int i = 0; i < sampleCount; ++i) buffer[i] = 0;
+            UpdateAudioStream(bgmStream, buffer, sampleCount);
+            return;
+        }
+
+        // Hill Climb Racing Theme composition parameters (132 BPM)
+        const float bpm = 132.0f;
+        const float beatDur = 60.0f / bpm;
+        const float stepDur = beatDur * 0.5f; // Eighth note step (0.227s)
+        const int totalPatternSteps = 32;     // 16 beats = 4 bars loop
+
+        // Iconic Hill Climb Racing F-Minor Blues Melody Frequencies [3]
+        const float melodyNotes[totalPatternSteps] = {
+            // Bar 1: F4 -> Ab4 -> Bb4 -> B4 -> C5 -> Bb4 -> Ab4 -> F4
+            349.23f, 415.30f, 466.16f, 493.88f, 523.25f, 466.16f, 415.30f, 349.23f,
+            // Bar 2: Eb4 -> rest -> F4 -> rest -> C4 -> Eb4 -> F4 -> rest
+            311.13f, 0.0f,    349.23f, 0.0f,    261.63f, 311.13f, 349.23f, 0.0f,
+            // Bar 3 (Bb minor): Bb4 -> Db5 -> Eb5 -> E5 -> F5 -> Eb5 -> Db5 -> Bb4
+            466.16f, 554.37f, 622.25f, 659.25f, 698.46f, 622.25f, 554.37f, 466.16f,
+            // Bar 4 (Turnaround): C5 -> Bb4 -> Ab4 -> F4 -> Eb4 -> G4 -> F4 -> rest
+            523.25f, 466.16f, 415.30f, 349.23f, 311.13f, 392.00f, 349.23f, 0.0f
+        };
+
+        // Bouncy Country/Rockabilly Slap-Bass Frequencies
+        const float bassNotes[totalPatternSteps] = {
+            // Bar 1 (Fm slap): Root - offbeat - 5th - offbeat
+            87.31f, 0.0f, 130.81f, 0.0f, 87.31f, 0.0f, 130.81f, 0.0f,
+            // Bar 2 (Fm bounce)
+            87.31f, 0.0f, 130.81f, 0.0f, 77.78f, 0.0f, 130.81f, 0.0f,
+            // Bar 3 (Bbm slap)
+            116.54f, 0.0f, 174.61f, 0.0f, 116.54f, 0.0f, 174.61f, 0.0f,
+            // Bar 4 (C7 turnaround)
+            130.81f, 0.0f, 196.00f, 0.0f, 87.31f, 0.0f, 130.81f, 0.0f
+        };
 
         for (int i = 0; i < sampleCount; ++i) {
             bgmTime += 1.0f / sampleRate;
 
-            if (muted) {
-                buffer[i] = 0;
-                continue;
+            float loopTime = fmodf(bgmTime, totalPatternSteps * stepDur);
+            int stepIndex = (int)(loopTime / stepDur);
+            if (stepIndex >= totalPatternSteps) stepIndex = 0;
+            float stepTime = fmodf(loopTime, stepDur);
+
+            // 1. Honky-Tonk Lead Melody Synthesizer
+            float melodyFreq = melodyNotes[stepIndex];
+            float leadTone = 0.0f;
+            if (melodyFreq > 10.0f) {
+                // Square wave with fast organic decay & cheerful vibrato
+                float vibrato = sinf(2.0f * PI * 6.5f * bgmTime) * 3.0f;
+                float phase = fmodf((melodyFreq + vibrato) * stepTime, 1.0f);
+                leadTone = (phase > 0.45f ? 0.6f : -0.6f) * expf(-stepTime * 6.5f);
             }
 
-            if (!inGame) {
-                // Chill ambient hangar drone
-                float drone = sinf(2.0f * PI * 55.0f * bgmTime) * 0.15f + sinf(2.0f * PI * 110.0f * bgmTime) * 0.08f;
-                buffer[i] = (short)(drone * 32767.0f * 0.25f);
-                continue;
+            // 2. Playful Slap-Bass Generator
+            float bFreq = bassNotes[stepIndex];
+            float bassTone = 0.0f;
+            if (bFreq > 10.0f) {
+                float saw = (fmodf(bFreq * stepTime, 1.0f) * 2.0f - 1.0f);
+                bassTone = saw * expf(-stepTime * 11.0f) * 0.85f;
             }
 
-            // --- HARD COMBAT MUSIC GENERATOR ---
-            float beatPos = fmodf(bgmTime, beatDuration);
-            float beatProgress = beatPos / beatDuration;
+            // 3. Upbeat Hill Climb Rhythm Drums (Kick on 1 & 3, Snare on 2 & 4)
+            float beatPos = fmodf(bgmTime, beatDur);
+            int beatNumber = ((int)(bgmTime / beatDur)) % 4;
+            float drumKick = 0.0f;
+            float drumSnare = 0.0f;
 
-            // 1. Hard 4-on-the-Floor Sub Kick Drum with fast exponential pitch drop
-            float kickPitch = 150.0f * expf(-beatProgress * 26.0f) + 42.0f;
-            float kickTone = sinf(2.0f * PI * kickPitch * beatPos) * expf(-beatProgress * 7.0f);
+            if (beatNumber == 0 || beatNumber == 2) {
+                // Punchy low-fi bass drum
+                float kPitch = 120.0f * expf(-beatPos * 25.0f) + 40.0f;
+                drumKick = sinf(2.0f * PI * kPitch * beatPos) * expf(-beatPos * 10.0f);
+            } else {
+                // Bouncy snare slap
+                float noise = (((float)rand() / RAND_MAX) * 2.0f - 1.0f);
+                drumSnare = noise * expf(-beatPos * 22.0f);
+            }
 
-            // 2. Aggressive 16th-Note Acid Saw Bassline
-            float sixteenthTime = fmodf(bgmTime, beatDuration * 0.25f);
-            int step16 = ((int)(bgmTime / (beatDuration * 0.25f))) % 16;
-            
-            // Hard minor industrial progression
-            float noteFreq = 55.0f; // A1
-            if (step16 >= 4 && step16 < 8)   noteFreq = 65.41f; // C2
-            if (step16 >= 8 && step16 < 12)  noteFreq = 73.42f; // D2
-            if (step16 >= 12 && step16 < 16) noteFreq = 82.41f; // E2
-
-            float sawBass = (fmodf(sixteenthTime * noteFreq, 1.0f) * 2.0f - 1.0f);
-            // Non-linear hard overdrive saturation
-            sawBass = tanhf(sawBass * 2.8f) * expf(-(sixteenthTime / (beatDuration * 0.25f)) * 3.5f);
-
-            // 3. Piercing Arp Synth Lead
-            float arpFreq = noteFreq * 4.0f;
-            if (step16 % 2 == 1) arpFreq *= 1.5f;
-            float arpLead = sinf(2.0f * PI * arpFreq * bgmTime) * 0.14f;
-
-            // 4. Clashing Hi-Hat Shaker
+            // Offbeat hi-hat tick
             float hat = 0.0f;
-            if (step16 % 2 == 1) {
-                float rnd = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-                hat = rnd * expf(-(sixteenthTime / (beatDuration * 0.25f)) * 14.0f) * 0.12f;
+            if (stepIndex % 2 == 1) {
+                float hNoise = (((float)rand() / RAND_MAX) * 2.0f - 1.0f);
+                hat = hNoise * expf(-stepTime * 35.0f) * 0.12f;
             }
 
-            // Mix & overdrive distortion when DEOWAN approaches
-            float distortionBoost = 1.0f + threatIntensity * 0.5f;
-            float mix = (kickTone * 0.50f) + (sawBass * 0.35f) + arpLead + hat;
-            mix = tanhf(mix * distortionBoost) * 0.38f;
+            float mix = (leadTone * 0.38f) + (bassTone * 0.40f) + (drumKick * 0.36f) + (drumSnare * 0.28f) + hat;
+            mix = Clamp(mix, -1.0f, 1.0f) * 0.32f;
 
             buffer[i] = (short)(mix * 32767.0f);
         }
@@ -520,11 +568,9 @@ public:
     }
 
     void Draw(float targetX) const {
-        // Theme-driven dynamic color palette
         Color colCorridorBg, colRunwayStrip, colCeilRock, colFloorRock, colRimGlow, colGuideLines;
 
         if (theme == PassageTheme::PALE_SANDS) {
-            // [Theme 1]: Bright Pale Yellow Sands
             colCorridorBg   = Color{ 253, 250, 228, 255 };
             colRunwayStrip  = Color{ 255, 244, 185, 255 };
             colCeilRock     = Color{ 236, 222, 172, 255 };
@@ -532,21 +578,19 @@ public:
             colRimGlow      = Color{ 255, 232, 110, 255 };
             colGuideLines   = Color{ 245, 205, 70, 140 };
         } else if (theme == PassageTheme::NEON_VOID) {
-            // [Theme 2]: Cyberpunk Obsidian & Hot Pink / Cyan Rails
             colCorridorBg   = Color{ 20, 16, 36, 255 };
             colRunwayStrip  = Color{ 36, 26, 62, 255 };
             colCeilRock     = Color{ 14, 10, 26, 255 };
             colFloorRock    = Color{ 12, 8, 22, 255 };
-            colRimGlow      = Color{ 236, 72, 153, 255 }; // Hot Pink neon
-            colGuideLines   = Color{ 6, 182, 212, 200 };  // Cyan cyber track
+            colRimGlow      = Color{ 236, 72, 153, 255 };
+            colGuideLines   = Color{ 6, 182, 212, 200 };
         } else {
-            // [Theme 3]: Volcanic Magma Abyss
             colCorridorBg   = Color{ 48, 16, 16, 255 };
             colRunwayStrip  = Color{ 74, 22, 22, 255 };
             colCeilRock     = Color{ 28, 10, 10, 255 };
             colFloorRock    = Color{ 24, 8, 8, 255 };
-            colRimGlow      = Color{ 249, 115, 22, 255 }; // Molten Amber
-            colGuideLines   = Color{ 239, 68, 68, 180 };  // Lava Red
+            colRimGlow      = Color{ 249, 115, 22, 255 };
+            colGuideLines   = Color{ 239, 68, 68, 180 };
         }
 
         for (size_t i = 0; i < passage.size() - 1; ++i) {
@@ -557,7 +601,6 @@ public:
                 continue;
             }
 
-            // 1. Passage Interior Flight Runway
             Vector2 pathA = { p1.x, p1.ceilingY() };
             Vector2 pathB = { p2.x, p2.ceilingY() };
             Vector2 pathC = { p2.x, p2.floorY() };
@@ -572,7 +615,6 @@ public:
                 DrawLineEx(centerStart, centerEnd, 2.5f, colGuideLines);
             }
 
-            // 2. Ceiling Rock Slab
             Vector2 cA = { p1.x, -500.0f };
             Vector2 cB = { p2.x, -500.0f };
             Vector2 cC = { p2.x, p2.ceilingY() };
@@ -581,7 +623,6 @@ public:
             DrawTriangle(cA, cC, cB, colCeilRock);
             DrawLineEx(cD, cC, 4.0f, colRimGlow);
 
-            // 3. Floor Rock Slab
             Vector2 fA = { p1.x, p1.floorY() };
             Vector2 fB = { p2.x, p2.floorY() };
             Vector2 fC = { p2.x, (float)SCREEN_HEIGHT + 500.0f };
@@ -716,7 +757,7 @@ public:
     void OnPlayerProximity(const Vector2 &playerPos, AudioSynthesizer &audio) override {
         if (!triggered && Vector2Distance(playerPos, position) < alertDistance && playerPos.x < position.x + 40.0f) {
             triggered = true;
-            PlaySound(audio.sndAlarm);
+            audio.PlaySFX(audio.sndAlarm);
         }
     }
 
@@ -985,7 +1026,7 @@ public:
                 alarmTriggered = true;
                 alarmSoundCooldown -= dt;
                 if (alarmSoundCooldown <= 0.0f) {
-                    PlaySound(audio.sndAlarm);
+                    audio.PlaySFX(audio.sndAlarm);
                     alarmSoundCooldown = 0.75f;
                 }
             }
@@ -994,7 +1035,7 @@ public:
                 pursuing = true;
                 alarmTriggered = false;
                 roarTimer = 0.0f;
-                PlaySound(audio.sndRoar);
+                audio.PlaySFX(audio.sndRoar);
             }
             return;
         }
@@ -1002,7 +1043,7 @@ public:
         roarTimer += dt;
         if (roarTimer > 6.0f) {
             roarTimer = 0.0f;
-            PlaySound(audio.sndRoar);
+            audio.PlaySFX(audio.sndRoar);
         }
 
         if (rand() % 2 == 0) {
@@ -1033,27 +1074,25 @@ public:
         }
     }
 
-    // Triggered when Jet Flares intercept DEOWAN
     void BlastByFlares(ParticleSystem &particles, AudioSynthesizer &audio) {
         pursuing = false;
         alarmTriggered = false;
-        spawnTimer = 18.0f; // Retreats, returns later
+        spawnTimer = 18.0f;
         position = Vector2{ -800.0f, (float)SCREEN_HEIGHT / 2.0f };
 
-        PlaySound(audio.sndMonsterBlast);
+        audio.PlaySFX(audio.sndMonsterBlast);
 
-        // Spectacular Multi-Colored Blast Particles
         for (int i = 0; i < 55; ++i) {
             float ang = ((float)rand() / RAND_MAX) * 2.0f * PI;
             float spd = (float)(rand() % 380 + 100);
             Vector2 pVel = { cosf(ang) * spd, sinf(ang) * spd };
 
             Color blastColors[5] = {
-                Color{ 255, 240, 100, 255 }, // Solar Yellow
-                Color{ 255, 80, 20, 255 },   // Fiery Orange
-                Color{ 236, 72, 153, 255 },  // Hot Magenta
-                Color{ 6, 182, 212, 255 },   // Electric Cyan
-                Color{ 255, 255, 255, 255 }  // White Core
+                Color{ 255, 240, 100, 255 },
+                Color{ 255, 80, 20, 255 },
+                Color{ 236, 72, 153, 255 },
+                Color{ 6, 182, 212, 255 },
+                Color{ 255, 255, 255, 255 }
             };
             Color pCol = blastColors[rand() % 5];
             particles.Emit(position, pVel, pCol, (float)(rand() % 6 + 4), (float)(rand() % 50 + 40) / 100.0f);
@@ -1092,7 +1131,7 @@ public:
 };
 
 // ---------------------------------------------------------
-// Player Spaceship Entity with Countermeasure Flare Launcher
+// Player Spaceship Entity
 // ---------------------------------------------------------
 class PlayerSpaceship : public Entity {
 public:
@@ -1199,14 +1238,14 @@ public:
             particles.Emit(ex1, Vector2{ -cosf(angle) * 260.0f + (rand() % 60 - 30), -sinf(angle) * 260.0f + (rand() % 60 - 30) }, flameColor, 5.0f, 0.35f);
             particles.Emit(ex2, Vector2{ -cosf(angle) * 260.0f + (rand() % 60 - 30), -sinf(angle) * 260.0f + (rand() % 60 - 30) }, Color{ 255, 220, 60, 255 }, 5.0f, 0.35f);
 
-            if (!IsSoundPlaying(audio.sndBoost)) PlaySound(audio.sndBoost);
+            if (!IsSoundPlaying(audio.sndBoost)) audio.PlaySFX(audio.sndBoost);
         }
 
         // Deflector Shield ([E] or MMB)
         if ((IsKeyDown(KEY_E) || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) && energy > 8.0f) {
             shieldActive = true;
             energy -= 20.0f * dt;
-            if (!IsSoundPlaying(audio.sndShield) && (rand() % 8 == 0)) PlaySound(audio.sndShield);
+            if (!IsSoundPlaying(audio.sndShield) && (rand() % 8 == 0)) audio.PlaySFX(audio.sndShield);
         } else {
             shieldActive = false;
         }
@@ -1217,18 +1256,17 @@ public:
             energy -= 32.0f * dt;
             hull = fminf(maxHull, hull + 25.0f * dt);
             particles.Emit(Vector2{ position.x + (rand() % 32 - 16), position.y + (rand() % 32 - 16) }, { 0.0f, -45.0f }, Color{ 34, 211, 238, 255 }, 3.5f, 0.4f);
-            if (!IsSoundPlaying(audio.sndRepair) && (rand() % 12 == 0)) PlaySound(audio.sndRepair);
+            if (!IsSoundPlaying(audio.sndRepair) && (rand() % 12 == 0)) audio.PlaySFX(audio.sndRepair);
         } else {
             damageControlActive = false;
         }
 
-        // --- FIGHTER JET FLARE LAUNCHER ([SPACE] KEY) ---
+        // Countermeasure Flares ([SPACE])
         flareCooldown -= dt;
         if (IsKeyPressed(KEY_SPACE) && flareCooldown <= 0.0f) {
-            flareCooldown = 0.85f; // Fast countermeasure recharge
-            PlaySound(audio.sndFlare);
+            flareCooldown = 0.85f;
+            audio.PlaySFX(audio.sndFlare);
 
-            // Deploy 5 glowing countermeasure flares in a backwards spray arc
             for (int i = 0; i < 5; ++i) {
                 float spreadAngle = angle + PI + ((float)(i - 2) * 0.22f) + ((float)(rand() % 20 - 10) * 0.01f);
                 float flareSpeed = (float)(rand() % 160 + 340);
@@ -1344,7 +1382,7 @@ public:
 };
 
 // ---------------------------------------------------------
-// HUD & In-Game Alarm Overlay
+// HUD & In-Game Alarm Overlay with Dedicated Pause Button
 // ---------------------------------------------------------
 class GameHUD {
 public:
@@ -1358,40 +1396,43 @@ public:
         DrawTextEx(font, text, { (float)x, (float)y }, (float)fontSize, 1.0f, color);
     }
 
-    static void Render(Font font, const PlayerSpaceship &player, const DeowanMonster &monster, float timeRemaining) {
+    static void Render(Font font, const PlayerSpaceship &player, const DeowanMonster &monster, float timeRemaining, const HoverButton &btnPauseHUD) {
         DrawRectangle(0, 0, SCREEN_WIDTH, 56, Color{ 16, 22, 36, 245 });
         DrawLine(0, 56, SCREEN_WIDTH, 56, Color{ 48, 65, 98, 255 });
 
-        DrawCard(15, 10, 180, 36, Color{ 24, 34, 56, 255 }, Color{ 56, 189, 248, 255 });
+        DrawCard(15, 10, 170, 36, Color{ 24, 34, 56, 255 }, Color{ 56, 189, 248, 255 });
         DrawTextBold(font, "LOST PASSAGE", 25, 18, 18, Color{ 224, 242, 254, 255 });
 
         std::string secStr = "SECTOR 0" + std::to_string(player.currentSector);
-        DrawCard(205, 10, 120, 36, Color{ 24, 34, 56, 255 }, Color{ 0, 220, 255, 200 });
-        DrawTextBold(font, secStr.c_str(), 215, 19, 16, Color{ 56, 189, 248, 255 });
+        DrawCard(195, 10, 115, 36, Color{ 24, 34, 56, 255 }, Color{ 0, 220, 255, 200 });
+        DrawTextBold(font, secStr.c_str(), 205, 19, 16, Color{ 56, 189, 248, 255 });
 
         std::stringstream ssTime;
         ssTime << "TIME: " << std::fixed << std::setprecision(1) << timeRemaining << "s";
         Color timeBg = (timeRemaining < 15.0f) ? Color{ 90, 25, 25, 255 } : Color{ 50, 45, 20, 255 };
         Color timeBorder = (timeRemaining < 15.0f) ? Color{ 240, 60, 60, 255 } : Color{ 250, 204, 21, 255 };
-        DrawCard(335, 10, 150, 36, timeBg, timeBorder);
-        DrawTextBold(font, ssTime.str().c_str(), 350, 18, 18, timeBorder);
+        DrawCard(320, 10, 140, 36, timeBg, timeBorder);
+        DrawTextBold(font, ssTime.str().c_str(), 335, 18, 18, timeBorder);
 
-        DrawCard(495, 10, 130, 36, Color{ 24, 34, 56, 255 }, Color{ 90, 110, 140, 255 });
+        DrawCard(470, 10, 120, 36, Color{ 24, 34, 56, 255 }, Color{ 90, 110, 140, 255 });
         std::string distStr = std::to_string((int)player.distanceTraveled) + "m";
-        DrawTextBold(font, distStr.c_str(), 510, 19, 16, RAYWHITE);
+        DrawTextBold(font, distStr.c_str(), 485, 19, 16, RAYWHITE);
 
-        DrawCard(635, 10, 120, 36, Color{ 45, 20, 32, 255 }, Color{ 255, 70, 120, 255 });
+        DrawCard(600, 10, 115, 36, Color{ 45, 20, 32, 255 }, Color{ 255, 70, 120, 255 });
         std::string heartStr = "HEARTS: " + std::to_string(player.heartsCollected);
-        DrawTextBold(font, heartStr.c_str(), 645, 19, 15, Color{ 255, 100, 150, 255 });
+        DrawTextBold(font, heartStr.c_str(), 610, 19, 15, Color{ 255, 100, 150, 255 });
 
-        DrawCard(765, 10, 120, 36, Color{ 20, 40, 40, 255 }, Color{ 45, 212, 191, 255 });
+        DrawCard(725, 10, 115, 36, Color{ 20, 40, 40, 255 }, Color{ 45, 212, 191, 255 });
         std::string crysStr = "CRYSTALS: " + std::to_string(player.crystalsCollected);
-        DrawTextBold(font, crysStr.c_str(), 775, 19, 14, Color{ 94, 234, 212, 255 });
+        DrawTextBold(font, crysStr.c_str(), 735, 19, 14, Color{ 94, 234, 212, 255 });
 
-        DrawCard(895, 10, 110, 36, Color{ 28, 36, 56, 255 }, Color{ 140, 160, 200, 255 });
-        DrawTextBold(font, "[M] MENU", 910, 20, 14, Color{ 190, 215, 245, 255 });
+        DrawCard(850, 10, 100, 36, Color{ 28, 36, 56, 255 }, Color{ 140, 160, 200, 255 });
+        DrawTextBold(font, "[M] MENU", 860, 20, 14, Color{ 190, 215, 245, 255 });
 
-        // --- DEOWAN ALARM POP-UP NOTIFICATION ---
+        // Draw Interactive HUD Pause Button
+        btnPauseHUD.Draw(font, 14);
+
+        // DEOWAN Alarm Notification Banner
         if (monster.alarmTriggered) {
             float blink = fabs(sinf((float)GetTime() * 8.0f));
             int boxW = 540;
@@ -1412,31 +1453,32 @@ public:
             DrawTextBold(font, threatStr.c_str(), SCREEN_WIDTH / 2 - (int)MeasureTextEx(font, threatStr.c_str(), 13, 1.0f).x / 2, 78, 13, Color{ 255, 160, 160, 255 });
         }
 
-        // Vital gauges & Subsystem key prompts
+        // Vital gauges
         int barY = SCREEN_HEIGHT - 95;
-        DrawCard(20, barY - 10, 460, 85, Color{ 16, 22, 36, 245 }, Color{ 48, 65, 98, 255 });
+        DrawCard(20, barY - 10, 470, 85, Color{ 16, 22, 36, 245 }, Color{ 48, 65, 98, 255 });
 
         DrawTextBold(font, "SHIP HULL INTEGRITY", 32, barY + 2, 12, Color{ 215, 230, 250, 255 });
         float hullRatio = player.hull / player.maxHull;
-        DrawRectangle(205, barY, 230, 14, Color{ 30, 42, 60, 255 });
+        DrawRectangle(210, barY, 235, 14, Color{ 30, 42, 60, 255 });
         Color hullCol = (hullRatio > 0.35f) ? Color{ 34, 197, 94, 255 } : Color{ 239, 68, 68, 255 };
-        DrawRectangle(205, barY, (int)(230 * hullRatio), 14, hullCol);
+        DrawRectangle(210, barY, (int)(235 * hullRatio), 14, hullCol);
 
         DrawTextBold(font, "ENERGY CAPACITOR", 32, barY + 24, 12, Color{ 215, 230, 250, 255 });
         float energyRatio = player.energy / player.maxEnergy;
-        DrawRectangle(205, barY + 22, 230, 14, Color{ 30, 42, 60, 255 });
-        DrawRectangle(205, barY + 22, (int)(230 * energyRatio), 14, Color{ 2, 132, 199, 255 });
+        DrawRectangle(210, barY + 22, 235, 14, Color{ 30, 42, 60, 255 });
+        DrawRectangle(210, barY + 22, (int)(235 * energyRatio), 14, Color{ 2, 132, 199, 255 });
 
-        DrawTextBold(font, "[SPACE] Countermeasure Flares  |  [SHIFT] Boost  |  [E] Shield", 32, barY + 48, 11, Color{ 140, 220, 255, 255 });
+        DrawTextBold(font, "[SPACE] Flare Blast  |  [SHIFT] Boost  |  [E] Shield  |  [P] Pause", 32, barY + 48, 11, Color{ 140, 220, 255, 255 });
     }
 };
 
 // ---------------------------------------------------------
-// Master Game Engine Class (Home UI, Hangar & Gameplay)
+// Master Game Engine Class (Home, Modals, Pause & Settings)
 // ---------------------------------------------------------
 class LostPassageGame {
 private:
     GameState state;
+    GameState previousState;
     Difficulty difficulty;
     ShipType selectedShip;
     PassageTheme selectedPassage;
@@ -1470,8 +1512,22 @@ private:
     HoverButton btnSelectShip;
     HoverButton btnSelectPassage;
     HoverButton btnLaunch;
-    HoverButton btnAudioToggle;
+    HoverButton btnSettings;
     HoverButton btnExitGame;
+
+    // In-Game Pause Button on HUD
+    HoverButton btnPauseHUD;
+
+    // Pause Dialog Buttons
+    HoverButton btnPauseResume;
+    HoverButton btnPauseRestart;
+    HoverButton btnPauseSettings;
+    HoverButton btnPauseHome;
+
+    // Settings Modal Buttons
+    HoverButton btnToggleMusic;
+    HoverButton btnToggleSFX;
+    HoverButton btnSettingsBack;
 
     // Ship Selection Modal Buttons
     HoverButton btnShipValkyrie;
@@ -1493,6 +1549,7 @@ private:
 public:
     LostPassageGame() {
         state = GameState::TITLE_MENU;
+        previousState = GameState::TITLE_MENU;
         difficulty = Difficulty::COMMANDER;
         selectedShip = ShipType::VALKYRIE;
         selectedPassage = PassageTheme::PALE_SANDS;
@@ -1525,11 +1582,11 @@ public:
         camera.rotation = 0.0f;
         camera.zoom = 1.0f;
 
-        BuildHomeUI();
+        BuildUI();
         ResetGame();
     }
 
-    void BuildHomeUI() {
+    void BuildUI() {
         float diffY = 275.0f;
         float diffW = 140.0f;
         float diffH = 44.0f;
@@ -1543,8 +1600,24 @@ public:
         btnSelectPassage = { Rectangle{ 545, 375, 190, 50 }, "SELECT PASSAGE", Color{ 25, 45, 45, 255 }, Color{ 20, 184, 166, 255 }, Color{ 20, 184, 166, 200 }, Color{ 255, 255, 255, 255 }, Color{ 204, 251, 241, 255 }, Color{ 10, 35, 30, 255 } };
         btnLaunch        = { Rectangle{ 760, 375, 190, 50 }, "LAUNCH",         Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 220 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
 
-        btnAudioToggle   = { Rectangle{ 430, 445, 200, 38 }, "AUDIO: ON",      Color{ 25, 35, 52, 255 }, Color{ 100, 116, 139, 255 }, Color{ 71, 85, 105, 255 }, Color{ 255, 255, 255, 255 }, Color{ 203, 213, 225, 255 }, Color{ 15, 23, 42, 255 } };
+        btnSettings      = { Rectangle{ 430, 445, 200, 38 }, "SETTINGS",       Color{ 28, 38, 58, 255 }, Color{ 56, 189, 248, 255 }, Color{ 56, 189, 248, 180 }, Color{ 255, 255, 255, 255 }, Color{ 186, 230, 253, 255 }, Color{ 15, 23, 42, 255 } };
         btnExitGame      = { Rectangle{ 650, 445, 200, 38 }, "EXIT",           Color{ 45, 22, 26, 255 }, Color{ 239, 68, 68, 255 }, Color{ 239, 68, 68, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 35, 10, 15, 255 } };
+
+        // HUD Pause Button
+        btnPauseHUD      = { Rectangle{ 960, 10, 110, 36 }, "[ || ] PAUSE",    Color{ 24, 34, 56, 255 }, Color{ 250, 204, 21, 255 }, Color{ 250, 204, 21, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 240, 138, 255 }, Color{ 25, 20, 10, 255 } };
+
+        // Pause Menu Dialog Buttons
+        float pBoxX = SCREEN_WIDTH / 2 - 130;
+        btnPauseResume   = { Rectangle{ pBoxX, 260, 260, 48 }, "RESUME FLIGHT", Color{ 20, 55, 35, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 200 }, Color{ 255, 255, 255, 255 }, Color{ 187, 247, 208, 255 }, Color{ 10, 30, 15, 255 } };
+        btnPauseRestart  = { Rectangle{ pBoxX, 320, 260, 48 }, "RESTART RUN",  Color{ 28, 42, 60, 255 }, Color{ 56, 189, 248, 255 }, Color{ 56, 189, 248, 180 }, Color{ 255, 255, 255, 255 }, Color{ 186, 230, 253, 255 }, Color{ 15, 23, 42, 255 } };
+        btnPauseSettings = { Rectangle{ pBoxX, 380, 260, 48 }, "SETTINGS",     Color{ 30, 28, 55, 255 }, Color{ 168, 85, 247, 255 }, Color{ 168, 85, 247, 180 }, Color{ 255, 255, 255, 255 }, Color{ 233, 213, 255, 255 }, Color{ 25, 10, 45, 255 } };
+        btnPauseHome     = { Rectangle{ pBoxX, 440, 260, 48 }, "RETURN TO HOME",Color{ 45, 22, 26, 255 }, Color{ 239, 68, 68, 255 }, Color{ 239, 68, 68, 180 }, Color{ 255, 255, 255, 255 }, Color{ 254, 202, 202, 255 }, Color{ 35, 10, 15, 255 } };
+
+        // Settings Dialog Buttons
+        float sBoxX = SCREEN_WIDTH / 2 - 170;
+        btnToggleMusic   = { Rectangle{ sBoxX, 260, 340, 52 }, "MUSIC (BGM): ON", Color{ 20, 40, 60, 255 }, Color{ 56, 189, 248, 255 }, Color{ 56, 189, 248, 200 }, Color{ 255, 255, 255, 255 }, Color{ 224, 242, 254, 255 }, Color{ 15, 23, 42, 255 } };
+        btnToggleSFX     = { Rectangle{ sBoxX, 330, 340, 52 }, "SOUND FX: ON",    Color{ 20, 40, 60, 255 }, Color{ 34, 197, 94, 255 }, Color{ 34, 197, 94, 200 }, Color{ 255, 255, 255, 255 }, Color{ 220, 252, 231, 255 }, Color{ 10, 30, 15, 255 } };
+        btnSettingsBack  = { Rectangle{ sBoxX, 420, 340, 50 }, "APPLY & RETURN",  Color{ 30, 28, 55, 255 }, Color{ 168, 85, 247, 255 }, Color{ 168, 85, 247, 200 }, Color{ 255, 255, 255, 255 }, Color{ 233, 213, 255, 255 }, Color{ 25, 10, 45, 255 } };
 
         // Ship Selection Modal Buttons
         float shipCardY = 220.0f;
@@ -1650,16 +1723,12 @@ public:
     }
 
     void Update(float dt) {
-        float threat = 0.0f;
-        if (monster.pursuing || monster.alarmTriggered) {
-            float dist = Vector2Distance(player.position, monster.position);
-            threat = Clamp(1.0f - (dist / 950.0f), 0.35f, 1.0f);
-        }
-        audio.UpdateBGM(state == GameState::PLAYING, threat);
+        // Continuous, Full-Time Background Music Update
+        audio.UpdateBGM();
 
         bool isHovering = false;
 
-        // Navigation in Home & Modals
+        // Title Screen Interaction
         if (state == GameState::TITLE_MENU) {
             btnCadet.selected      = (difficulty == Difficulty::CADET);
             btnCommander.selected  = (difficulty == Difficulty::COMMANDER);
@@ -1667,7 +1736,7 @@ public:
             btnApocalypse.selected = (difficulty == Difficulty::APOCALYPSE);
 
             if (btnCadet.IsHovered() || btnCommander.IsHovered() || btnVoidWalker.IsHovered() || btnApocalypse.IsHovered() ||
-                btnSelectShip.IsHovered() || btnSelectPassage.IsHovered() || btnLaunch.IsHovered() || btnAudioToggle.IsHovered() || btnExitGame.IsHovered()) {
+                btnSelectShip.IsHovered() || btnSelectPassage.IsHovered() || btnLaunch.IsHovered() || btnSettings.IsHovered() || btnExitGame.IsHovered()) {
                 isHovering = true;
             }
 
@@ -1679,9 +1748,10 @@ public:
             if (btnSelectShip.IsClicked())    { state = GameState::SHIP_SELECT_MODAL; return; }
             if (btnSelectPassage.IsClicked()) { state = GameState::PASSAGE_SELECT_MODAL; return; }
 
-            if (btnAudioToggle.IsClicked()) {
-                audio.muted = !audio.muted;
-                btnAudioToggle.text = audio.muted ? "AUDIO: OFF" : "AUDIO: ON";
+            if (btnSettings.IsClicked()) {
+                previousState = GameState::TITLE_MENU;
+                state = GameState::SETTINGS_MODAL;
+                return;
             }
 
             if (btnExitGame.IsClicked() || IsKeyPressed(KEY_ESCAPE)) {
@@ -1694,7 +1764,54 @@ public:
                 state = GameState::PLAYING;
                 return;
             }
-        } else if (state == GameState::SHIP_SELECT_MODAL) {
+        } 
+        // Settings Modal
+        else if (state == GameState::SETTINGS_MODAL) {
+            if (btnToggleMusic.IsHovered() || btnToggleSFX.IsHovered() || btnSettingsBack.IsHovered()) {
+                isHovering = true;
+            }
+
+            btnToggleMusic.text = audio.bgmEnabled ? "MUSIC (BGM): ON" : "MUSIC (BGM): OFF";
+            btnToggleSFX.text   = audio.sfxEnabled ? "SOUND FX: ON" : "SOUND FX: OFF";
+
+            if (btnToggleMusic.IsClicked()) {
+                audio.bgmEnabled = !audio.bgmEnabled;
+            }
+            if (btnToggleSFX.IsClicked()) {
+                audio.sfxEnabled = !audio.sfxEnabled;
+            }
+            if (btnSettingsBack.IsClicked() || IsKeyPressed(KEY_ESCAPE)) {
+                state = previousState;
+                return;
+            }
+        }
+        // In-Game Pause Modal
+        else if (state == GameState::PAUSED) {
+            if (btnPauseResume.IsHovered() || btnPauseRestart.IsHovered() || btnPauseSettings.IsHovered() || btnPauseHome.IsHovered()) {
+                isHovering = true;
+            }
+
+            if (btnPauseResume.IsClicked() || IsKeyPressed(KEY_P) || IsKeyPressed(KEY_ESCAPE)) {
+                state = GameState::PLAYING;
+                return;
+            }
+            if (btnPauseRestart.IsClicked() || IsKeyPressed(KEY_R)) {
+                ResetGame();
+                state = GameState::PLAYING;
+                return;
+            }
+            if (btnPauseSettings.IsClicked()) {
+                previousState = GameState::PAUSED;
+                state = GameState::SETTINGS_MODAL;
+                return;
+            }
+            if (btnPauseHome.IsClicked() || IsKeyPressed(KEY_M)) {
+                state = GameState::TITLE_MENU;
+                return;
+            }
+        }
+        // Ship Selection Modal
+        else if (state == GameState::SHIP_SELECT_MODAL) {
             btnShipValkyrie.selected    = (selectedShip == ShipType::VALKYRIE);
             btnShipPhantom.selected     = (selectedShip == ShipType::PHANTOM);
             btnShipDreadnought.selected = (selectedShip == ShipType::DREADNOUGHT);
@@ -1711,7 +1828,9 @@ public:
                 state = GameState::TITLE_MENU;
                 return;
             }
-        } else if (state == GameState::PASSAGE_SELECT_MODAL) {
+        } 
+        // Passage Selection Modal
+        else if (state == GameState::PASSAGE_SELECT_MODAL) {
             btnPassPale.selected     = (selectedPassage == PassageTheme::PALE_SANDS);
             btnPassNeon.selected     = (selectedPassage == PassageTheme::NEON_VOID);
             btnPassVolcanic.selected = (selectedPassage == PassageTheme::VOLCANIC_ABYSS);
@@ -1728,7 +1847,9 @@ public:
                 state = GameState::TITLE_MENU;
                 return;
             }
-        } else if (state == GameState::GAME_OVER) {
+        } 
+        // Game Over Dialog
+        else if (state == GameState::GAME_OVER) {
             if (btnReplay.IsHovered() || btnHome.IsHovered() || btnExit.IsHovered()) {
                 isHovering = true;
             }
@@ -1749,19 +1870,6 @@ public:
             return;
         }
 
-        if (isHovering) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
-        else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
-
-        if (IsKeyPressed(KEY_M)) {
-            state = GameState::TITLE_MENU;
-            return;
-        }
-
-        if (state == GameState::PAUSED) {
-            if (IsKeyPressed(KEY_P) || IsKeyPressed(KEY_ESCAPE)) state = GameState::PLAYING;
-            return;
-        }
-
         if (state == GameState::SECTOR_CLEARED) {
             if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_R) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 ResetGame();
@@ -1770,152 +1878,162 @@ public:
             return;
         }
 
-        if (state != GameState::PLAYING) return;
+        // --- PLAYING STATE ---
+        if (state == GameState::PLAYING) {
+            if (btnPauseHUD.IsHovered()) isHovering = true;
 
-        if (IsKeyPressed(KEY_P)) {
-            state = GameState::PAUSED;
-            return;
-        }
-
-        timeRemaining -= dt;
-        if (timeRemaining <= 0.0f) {
-            timeRemaining = 0.0f;
-            TriggerGameOver("CHRONO CORE DEPLETED - TIME EXPIRED");
-            return;
-        }
-
-        player.ProcessInput(camera, dt, flares, particles, audio);
-        player.Update(dt, particles, audio);
-
-        // --- UPDATE COUNTERMEASURE FLARES & DETECT DEOWAN BLAST ---
-        for (size_t i = 0; i < flares.size();) {
-            flares[i].life -= dt;
-            if (flares[i].life <= 0.0f || !flares[i].active) {
-                flares.erase(flares.begin() + i);
-            } else {
-                flares[i].position = Vector2Add(flares[i].position, Vector2Scale(flares[i].velocity, dt));
-                flares[i].velocity = Vector2Scale(flares[i].velocity, 0.96f); // Air resistance
-
-                // Spark trails
-                particles.Emit(flares[i].position, Vector2{ (float)(rand() % 40 - 20), (float)(rand() % 40 - 20) }, Color{ 255, 220, 80, 255 }, 3.5f, 0.25f);
-
-                // Flare collision with DEOWAN
-                if (monster.pursuing && Vector2Distance(flares[i].position, monster.position) < (flares[i].radius + monster.radius + 15.0f)) {
-                    flares[i].active = false;
-                    monster.BlastByFlares(particles, audio);
-                    screenShake = 1.3f; // Heavy screen blast shake
-                    finalScore += 1500; // Countermeasure victory bonus!
-                }
-                ++i;
+            // Trigger Pause via button or keyboard
+            if (btnPauseHUD.IsClicked() || IsKeyPressed(KEY_P) || IsKeyPressed(KEY_ESCAPE)) {
+                state = GameState::PAUSED;
+                return;
             }
-        }
 
-        PassageSlice currentSlice = passage.GetSliceAt(player.position.x);
-        if (player.position.y - player.radius < currentSlice.ceilingY()) {
-            player.position.y = currentSlice.ceilingY() + player.radius;
-            ApplyDamage(15.0f);
-        } else if (player.position.y + player.radius > currentSlice.floorY()) {
-            player.position.y = currentSlice.floorY() - player.radius;
-            ApplyDamage(15.0f);
-        }
-
-        monster.Update(dt, particles, audio);
-        float monsterSpeed = (difficulty == Difficulty::APOCALYPSE) ? 430.0f : (difficulty == Difficulty::VOID_WALKER) ? 385.0f : 340.0f;
-        monster.FollowPlayer(player.position, monsterSpeed, dt);
-
-        if (monster.pursuing && Vector2Distance(player.position, monster.position) < (player.radius + monster.radius - 8.0f)) {
-            TriggerGameOver("DEVOUR-KILL BY DEOWAN - JET CRUSHED");
-            return;
-        }
-
-        for (auto &trap : traps) {
-            if (!trap->IsActive()) continue;
-            trap->OnPlayerProximity(player.position, audio);
-            trap->Update(dt, particles, audio);
-
-            if (Vector2Distance(player.position, trap->GetPosition()) < (player.radius + trap->GetRadius())) {
-                ApplyDamage(trap->GetDamage());
-                trap->Deactivate();
-                for (int k = 0; k < 12; ++k) {
-                    particles.Emit(trap->GetPosition(), { (float)(rand() % 240 - 120), (float)(rand() % 240 - 120) }, Color{ 255, 60, 40, 255 }, 5.0f, 0.6f);
-                }
+            if (IsKeyPressed(KEY_M)) {
+                state = GameState::TITLE_MENU;
+                return;
             }
-        }
 
-        for (auto &pickup : pickups) {
-            if (!pickup->IsActive()) continue;
-            pickup->Update(dt, particles, audio);
+            timeRemaining -= dt;
+            if (timeRemaining <= 0.0f) {
+                timeRemaining = 0.0f;
+                TriggerGameOver("CHRONO CORE DEPLETED - TIME EXPIRED");
+                return;
+            }
 
-            if (Vector2Distance(player.position, pickup->GetPosition()) < (player.radius + pickup->GetRadius())) {
-                pickup->MarkCollected();
+            player.ProcessInput(camera, dt, flares, particles, audio);
+            player.Update(dt, particles, audio);
 
-                if (auto heart = dynamic_cast<HeartPickup*>(pickup.get())) {
-                    player.hull = fminf(player.maxHull, player.hull + 30.0f);
-                    player.heartsCollected++;
-                    PlaySound(audio.sndHeart);
-                    for (int k = 0; k < 16; ++k) {
-                        particles.Emit(heart->GetPosition(), { (float)(rand() % 160 - 80), (float)(rand() % 160 - 80) }, Color{ 255, 50, 100, 255 }, 5.0f, 0.6f);
+            // Update Countermeasure Flares
+            for (size_t i = 0; i < flares.size();) {
+                flares[i].life -= dt;
+                if (flares[i].life <= 0.0f || !flares[i].active) {
+                    flares.erase(flares.begin() + i);
+                } else {
+                    flares[i].position = Vector2Add(flares[i].position, Vector2Scale(flares[i].velocity, dt));
+                    flares[i].velocity = Vector2Scale(flares[i].velocity, 0.96f);
+
+                    particles.Emit(flares[i].position, Vector2{ (float)(rand() % 40 - 20), (float)(rand() % 40 - 20) }, Color{ 255, 220, 80, 255 }, 3.5f, 0.25f);
+
+                    if (monster.pursuing && Vector2Distance(flares[i].position, monster.position) < (flares[i].radius + monster.radius + 15.0f)) {
+                        flares[i].active = false;
+                        monster.BlastByFlares(particles, audio);
+                        screenShake = 1.3f;
+                        finalScore += 1500;
                     }
-                } else if (auto crystal = dynamic_cast<ChronoCrystalPickup*>(pickup.get())) {
-                    timeRemaining += 5.0f;
-                    player.crystalsCollected++;
-                    PlaySound(audio.sndCrystal);
+                    ++i;
+                }
+            }
+
+            PassageSlice currentSlice = passage.GetSliceAt(player.position.x);
+            if (player.position.y - player.radius < currentSlice.ceilingY()) {
+                player.position.y = currentSlice.ceilingY() + player.radius;
+                ApplyDamage(15.0f);
+            } else if (player.position.y + player.radius > currentSlice.floorY()) {
+                player.position.y = currentSlice.floorY() - player.radius;
+                ApplyDamage(15.0f);
+            }
+
+            monster.Update(dt, particles, audio);
+            float monsterSpeed = (difficulty == Difficulty::APOCALYPSE) ? 430.0f : (difficulty == Difficulty::VOID_WALKER) ? 385.0f : 340.0f;
+            monster.FollowPlayer(player.position, monsterSpeed, dt);
+
+            if (monster.pursuing && Vector2Distance(player.position, monster.position) < (player.radius + monster.radius - 8.0f)) {
+                TriggerGameOver("DEVOUR-KILL BY DEOWAN - JET CRUSHED");
+                return;
+            }
+
+            for (auto &trap : traps) {
+                if (!trap->IsActive()) continue;
+                trap->OnPlayerProximity(player.position, audio);
+                trap->Update(dt, particles, audio);
+
+                if (Vector2Distance(player.position, trap->GetPosition()) < (player.radius + trap->GetRadius())) {
+                    ApplyDamage(trap->GetDamage());
+                    trap->Deactivate();
                     for (int k = 0; k < 12; ++k) {
-                        particles.Emit(crystal->GetPosition(), { (float)(rand() % 160 - 80), (float)(rand() % 160 - 80) }, Color{ 0, 255, 220, 255 }, 4.0f, 0.5f);
+                        particles.Emit(trap->GetPosition(), { (float)(rand() % 240 - 120), (float)(rand() % 240 - 120) }, Color{ 255, 60, 40, 255 }, 5.0f, 0.6f);
                     }
                 }
             }
-        }
 
-        hazardSpawnTimer -= dt;
-        if (hazardSpawnTimer <= 0.0f) {
-            SpawnHazard();
-            hazardSpawnTimer = (difficulty == Difficulty::APOCALYPSE) ? 1.4f : (difficulty == Difficulty::VOID_WALKER) ? 2.2f : 3.5f;
-        }
+            for (auto &pickup : pickups) {
+                if (!pickup->IsActive()) continue;
+                pickup->Update(dt, particles, audio);
 
-        for (auto &hazard : hazards) {
-            if (!hazard->IsActive()) continue;
-            hazard->TrackTarget(player.position, dt);
-            hazard->Update(dt, particles, audio);
+                if (Vector2Distance(player.position, pickup->GetPosition()) < (player.radius + pickup->GetRadius())) {
+                    pickup->MarkCollected();
 
-            if (Vector2Distance(player.position, hazard->GetPosition()) < (player.radius + hazard->GetRadius())) {
-                ApplyDamage(hazard->GetDamage());
-                hazard->Deactivate();
-                for (int k = 0; k < 20; ++k) {
-                    particles.Emit(hazard->GetPosition(), { (float)(rand() % 300 - 150), (float)(rand() % 300 - 150) }, Color{ 255, 120, 20, 255 }, 6.0f, 0.7f);
+                    if (auto heart = dynamic_cast<HeartPickup*>(pickup.get())) {
+                        player.hull = fminf(player.maxHull, player.hull + 30.0f);
+                        player.heartsCollected++;
+                        audio.PlaySFX(audio.sndHeart);
+                        for (int k = 0; k < 16; ++k) {
+                            particles.Emit(heart->GetPosition(), { (float)(rand() % 160 - 80), (float)(rand() % 160 - 80) }, Color{ 255, 50, 100, 255 }, 5.0f, 0.6f);
+                        }
+                    } else if (auto crystal = dynamic_cast<ChronoCrystalPickup*>(pickup.get())) {
+                        timeRemaining += 5.0f;
+                        player.crystalsCollected++;
+                        audio.PlaySFX(audio.sndCrystal);
+                        for (int k = 0; k < 12; ++k) {
+                            particles.Emit(crystal->GetPosition(), { (float)(rand() % 160 - 80), (float)(rand() % 160 - 80) }, Color{ 0, 255, 220, 255 }, 4.0f, 0.5f);
+                        }
+                    }
                 }
             }
 
-            if (hazard->GetPosition().x < player.position.x - 600.0f) hazard->Deactivate();
+            hazardSpawnTimer -= dt;
+            if (hazardSpawnTimer <= 0.0f) {
+                SpawnHazard();
+                hazardSpawnTimer = (difficulty == Difficulty::APOCALYPSE) ? 1.4f : (difficulty == Difficulty::VOID_WALKER) ? 2.2f : 3.5f;
+            }
+
+            for (auto &hazard : hazards) {
+                if (!hazard->IsActive()) continue;
+                hazard->TrackTarget(player.position, dt);
+                hazard->Update(dt, particles, audio);
+
+                if (Vector2Distance(player.position, hazard->GetPosition()) < (player.radius + hazard->GetRadius())) {
+                    ApplyDamage(hazard->GetDamage());
+                    hazard->Deactivate();
+                    for (int k = 0; k < 20; ++k) {
+                        particles.Emit(hazard->GetPosition(), { (float)(rand() % 300 - 150), (float)(rand() % 300 - 150) }, Color{ 255, 120, 20, 255 }, 6.0f, 0.7f);
+                    }
+                }
+
+                if (hazard->GetPosition().x < player.position.x - 600.0f) hazard->Deactivate();
+            }
+
+            particles.Update(dt);
+
+            if (player.position.x >= passage.totalLength - 400.0f) {
+                state = GameState::SECTOR_CLEARED;
+                finalScore = (int)(player.distanceTraveled + player.crystalsCollected * 250 + player.heartsCollected * 300 + timeRemaining * 100 + 10000);
+            }
+
+            camera.target.x = player.position.x + 120.0f;
+            camera.target.y = player.position.y;
+            if (screenShake > 0.0f) {
+                screenShake -= dt * 18.0f;
+                camera.offset.x = SCREEN_WIDTH * 0.30f + (rand() % 24 - 12) * screenShake;
+                camera.offset.y = SCREEN_HEIGHT * 0.50f + (rand() % 24 - 12) * screenShake;
+            } else {
+                camera.offset = Vector2{ (float)SCREEN_WIDTH * 0.30f, (float)SCREEN_HEIGHT * 0.50f };
+            }
         }
 
-        particles.Update(dt);
-
-        if (player.position.x >= passage.totalLength - 400.0f) {
-            state = GameState::SECTOR_CLEARED;
-            finalScore = (int)(player.distanceTraveled + player.crystalsCollected * 250 + player.heartsCollected * 300 + timeRemaining * 100 + 10000);
-        }
-
-        camera.target.x = player.position.x + 120.0f;
-        camera.target.y = player.position.y;
-        if (screenShake > 0.0f) {
-            screenShake -= dt * 18.0f;
-            camera.offset.x = SCREEN_WIDTH * 0.30f + (rand() % 24 - 12) * screenShake;
-            camera.offset.y = SCREEN_HEIGHT * 0.50f + (rand() % 24 - 12) * screenShake;
-        } else {
-            camera.offset = Vector2{ (float)SCREEN_WIDTH * 0.30f, (float)SCREEN_HEIGHT * 0.50f };
-        }
+        if (isHovering) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+        else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
     }
 
     void ApplyDamage(float dmg) {
         if (player.shieldActive) {
             player.energy = fmaxf(0.0f, player.energy - dmg * 0.6f);
             player.hull -= dmg * 0.15f;
-            PlaySound(audio.sndShield);
+            audio.PlaySFX(audio.sndShield);
             screenShake = 0.35f;
         } else {
             player.hull -= dmg;
-            PlaySound(audio.sndHit);
+            audio.PlaySFX(audio.sndHit);
             screenShake = 0.85f;
         }
 
@@ -1929,7 +2047,7 @@ public:
         state = GameState::GAME_OVER;
         gameOverReason = reason;
         finalScore = (int)(player.distanceTraveled + player.crystalsCollected * 250 + player.heartsCollected * 300);
-        PlaySound(audio.sndGameOver);
+        audio.PlaySFX(audio.sndGameOver);
     }
 
     void Draw() {
@@ -1939,14 +2057,17 @@ public:
                         (selectedPassage == PassageTheme::NEON_VOID)  ? Color{ 14, 10, 26, 255 } : Color{ 28, 10, 10, 255 };
         ClearBackground(bgClear);
 
-        if (state == GameState::TITLE_MENU || state == GameState::SHIP_SELECT_MODAL || state == GameState::PASSAGE_SELECT_MODAL) {
+        if (state == GameState::TITLE_MENU || state == GameState::SHIP_SELECT_MODAL || 
+            state == GameState::PASSAGE_SELECT_MODAL || (state == GameState::SETTINGS_MODAL && previousState == GameState::TITLE_MENU)) {
             DrawTitleScreen();
             if (state == GameState::SHIP_SELECT_MODAL)    DrawShipSelectModal();
             if (state == GameState::PASSAGE_SELECT_MODAL) DrawPassageSelectModal();
+            if (state == GameState::SETTINGS_MODAL)       DrawSettingsModal();
             EndDrawing();
             return;
         }
 
+        // World Camera
         BeginMode2D(camera);
         passage.Draw(camera.target.x);
 
@@ -1954,7 +2075,6 @@ public:
         for (const auto &t : traps)   t->Draw();
         for (const auto &h : hazards) h->Draw();
 
-        // Draw Active Countermeasure Flares
         for (const auto &fl : flares) {
             DrawCircleGradient((int)fl.position.x, (int)fl.position.y, fl.radius * 2.8f, Color{ 255, 230, 80, 220 }, BLANK);
             DrawCircleV(fl.position, fl.radius, Color{ 255, 120, 20, 255 });
@@ -1966,13 +2086,15 @@ public:
         player.Draw();
         EndMode2D();
 
-        GameHUD::Render(fontFredokaBold, player, monster, timeRemaining);
+        // In-game HUD
+        GameHUD::Render(fontFredokaBold, player, monster, timeRemaining, btnPauseHUD);
 
+        // Modals & Dialogs
         if (state == GameState::PAUSED) {
-            DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 8, 14, 26, 200 });
-            GameHUD::DrawCard(SCREEN_WIDTH / 2 - 240, SCREEN_HEIGHT / 2 - 90, 480, 180, Color{ 20, 28, 45, 250 }, Color{ 0, 220, 255, 255 });
-            GameHUD::DrawTextBold(fontFredokaBold, "MISSION PAUSED", SCREEN_WIDTH / 2 - 110, SCREEN_HEIGHT / 2 - 50, 28, RAYWHITE);
-            GameHUD::DrawTextBold(fontFredokaBold, "Press [P] or [ESC] to Resume Flight", SCREEN_WIDTH / 2 - 140, SCREEN_HEIGHT / 2 + 5, 16, Color{ 160, 200, 240, 255 });
+            DrawPauseDialog();
+        } else if (state == GameState::SETTINGS_MODAL && previousState == GameState::PAUSED) {
+            DrawPauseDialog();
+            DrawSettingsModal();
         } else if (state == GameState::GAME_OVER) {
             DrawGameOverDialog();
         } else if (state == GameState::SECTOR_CLEARED) {
@@ -2008,26 +2130,68 @@ public:
         btnVoidWalker.Draw(fontFredokaBold, 15);
         btnApocalypse.Draw(fontFredokaBold, 15);
 
-        // Status of Selected Ship & Passage
-        std::string sName = (selectedShip == ShipType::VALKYRIE) ? "CRAFT: VALKYRIE-IX (AZURE INTERCEPTOR)" :
-                            (selectedShip == ShipType::PHANTOM)   ? "CRAFT: PHANTOM (STEALTH RAIDER)" : "CRAFT: DREADNOUGHT-V (HEAVY CRUISER)";
+        std::string sName = (selectedShip == ShipType::VALKYRIE) ? "CRAFT: VALKYRIE-IX" :
+                            (selectedShip == ShipType::PHANTOM)   ? "CRAFT: PHANTOM" : "CRAFT: DREADNOUGHT";
         std::string pName = (selectedPassage == PassageTheme::PALE_SANDS) ? "REALM: PALE SANDS" :
-                            (selectedPassage == PassageTheme::NEON_VOID)  ? "REALM: NEON CYBER VOID" : "REALM: VOLCANIC ABYSS";
+                            (selectedPassage == PassageTheme::NEON_VOID)  ? "REALM: NEON VOID" : "REALM: VOLCANIC ABYSS";
 
         DrawTextEx(fontFredokaBold, sName.c_str(), { (float)SCREEN_WIDTH / 2 - 320, 340 }, 13, 1.0f, Color{ 56, 189, 248, 255 });
-        DrawTextEx(fontFredokaBold, pName.c_str(), { (float)SCREEN_WIDTH / 2 + 80, 340 }, 13, 1.0f, Color{ 245, 158, 11, 255 });
+        DrawTextEx(fontFredokaBold, pName.c_str(), { (float)SCREEN_WIDTH / 2 + 100, 340 }, 13, 1.0f, Color{ 245, 158, 11, 255 });
 
         btnSelectShip.Draw(fontFredokaBold, 15);
         btnSelectPassage.Draw(fontFredokaBold, 14);
         btnLaunch.Draw(fontFredokaBold, 18);
-        btnAudioToggle.Draw(fontFredokaBold, 14);
+        btnSettings.Draw(fontFredokaBold, 15);
         btnExitGame.Draw(fontFredokaBold, 15);
 
         GameHUD::DrawCard(SCREEN_WIDTH / 2 - 380, 530, 760, 100, Color{ 20, 28, 44, 245 }, Color{ 48, 65, 98, 255 });
         GameHUD::DrawTextBold(fontFredokaBold, "DEOWAN TACTICAL DEFENSE BRIEFING", SCREEN_WIDTH / 2 - 140, 540, 14, Color{ 255, 90, 90, 255 });
         DrawTextEx(fontFredokaBold, "- MONSTER WARNING: Watch for DEOWAN's Siren Alarm pop-up alert!", { (float)SCREEN_WIDTH / 2 - 340, 565 }, 12, 1.0f, Color{ 254, 202, 202, 255 });
         DrawTextEx(fontFredokaBold, "- FLARE BLAST: Press [SPACE] to launch Jet Countermeasure Flares to blow up DEOWAN!", { (float)SCREEN_WIDTH / 2 - 340, 587 }, 12, 1.0f, Color{ 250, 204, 21, 255 });
-        DrawTextEx(fontFredokaBold, "- PROPULSION: [WASD / Mouse] Steer | [SHIFT] Boost | [E] Kinetic Shield | [Q] Nanite Repair", { (float)SCREEN_WIDTH / 2 - 340, 609 }, 12, 1.0f, Color{ 148, 163, 184, 255 });
+        DrawTextEx(fontFredokaBold, "- PROPULSION: [WASD / Mouse] Steer | [SHIFT] Boost | [E] Kinetic Shield | [P] Pause", { (float)SCREEN_WIDTH / 2 - 340, 609 }, 12, 1.0f, Color{ 148, 163, 184, 255 });
+    }
+
+    // --- PAUSE DIALOG BOX ---
+    void DrawPauseDialog() {
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 10, 15, 26, 210 });
+
+        int boxW = 460;
+        int boxH = 410;
+        int boxX = SCREEN_WIDTH / 2 - boxW / 2;
+        int boxY = SCREEN_HEIGHT / 2 - boxH / 2;
+
+        DrawRectangleRounded(Rectangle{ (float)boxX, (float)boxY, (float)boxW, (float)boxH }, 0.12f, 6, Color{ 18, 26, 42, 252 });
+        DrawRectangleRoundedLines(Rectangle{ (float)boxX, (float)boxY, (float)boxW, (float)boxH }, 0.12f, 6, 3.0f, Color{ 56, 189, 248, 255 });
+
+        GameHUD::DrawTextBold(fontFredokaBold, "MISSION PAUSED", boxX + boxW / 2 - 120, boxY + 30, 28, RAYWHITE);
+        DrawTextEx(fontFredokaBold, "Tactical Flight Systems Suspended", { (float)boxX + boxW / 2 - 120, (float)boxY + 68 }, 14, 1.0f, Color{ 148, 163, 184, 255 });
+
+        // Draw Interactive Pause Buttons
+        btnPauseResume.Draw(fontFredokaBold, 16);
+        btnPauseRestart.Draw(fontFredokaBold, 16);
+        btnPauseSettings.Draw(fontFredokaBold, 16);
+        btnPauseHome.Draw(fontFredokaBold, 16);
+    }
+
+    // --- SETTINGS MODAL WINDOW ---
+    void DrawSettingsModal() {
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color{ 8, 12, 22, 235 });
+
+        int boxW = 500;
+        int boxH = 390;
+        int boxX = SCREEN_WIDTH / 2 - boxW / 2;
+        int boxY = SCREEN_HEIGHT / 2 - boxH / 2;
+
+        DrawRectangleRounded(Rectangle{ (float)boxX, (float)boxY, (float)boxW, (float)boxH }, 0.12f, 6, Color{ 18, 26, 44, 252 });
+        DrawRectangleRoundedLines(Rectangle{ (float)boxX, (float)boxY, (float)boxW, (float)boxH }, 0.12f, 6, 3.0f, Color{ 168, 85, 247, 255 });
+
+        GameHUD::DrawTextBold(fontFredokaBold, "AUDIO & SYSTEM SETTINGS", boxX + boxW / 2 - 170, boxY + 30, 26, Color{ 240, 249, 255, 255 });
+        DrawTextEx(fontFredokaBold, "Customize Background Music and Sound Effects", { (float)boxX + boxW / 2 - 150, (float)boxY + 68 }, 13, 1.0f, Color{ 192, 132, 252, 255 });
+
+        // Toggle Buttons
+        btnToggleMusic.Draw(fontFredokaBold, 18);
+        btnToggleSFX.Draw(fontFredokaBold, 18);
+        btnSettingsBack.Draw(fontFredokaBold, 18);
     }
 
     void DrawShipSelectModal() {
@@ -2057,19 +2221,16 @@ public:
         GameHUD::DrawCard(SCREEN_WIDTH / 2 - 470, 100, 940, 490, Color{ 15, 23, 42, 252 }, Color{ 20, 184, 166, 255 });
         GameHUD::DrawTextBold(fontFredokaBold, "REALM CARTOGRAPHY - SELECT PASSAGE", SCREEN_WIDTH / 2 - 230, 125, 24, Color{ 240, 249, 255, 255 });
 
-        // Passage 1: Pale Sands
         btnPassPale.Draw(fontFredokaBold, 16);
         DrawRectangle(250, 275, 200, 90, Color{ 253, 250, 228, 255 });
         DrawLineEx({ 250, 320 }, { 450, 320 }, 4.0f, Color{ 255, 232, 110, 255 });
         DrawTextEx(fontFredokaBold, "Terrain: Sandstone Cavern\nTheme: Pale Warm Yellow\nLighting: High Visibility\nAtmosphere: Clear", { 260, 395 }, 12, 1.0f, Color{ 254, 240, 138, 255 });
 
-        // Passage 2: Neon Void
         btnPassNeon.Draw(fontFredokaBold, 16);
         DrawRectangle(540, 275, 200, 90, Color{ 16, 12, 28, 255 });
         DrawLineEx({ 540, 320 }, { 740, 320 }, 4.0f, Color{ 236, 72, 153, 255 });
         DrawTextEx(fontFredokaBold, "Terrain: Obsidian Trench\nTheme: Cyberpunk Violet\nLighting: Electric Cyan Rails\nAtmosphere: Digital Mist", { 550, 395 }, 12, 1.0f, Color{ 244, 114, 182, 255 });
 
-        // Passage 3: Volcanic Abyss
         btnPassVolcanic.Draw(fontFredokaBold, 16);
         DrawRectangle(830, 275, 200, 90, Color{ 36, 12, 12, 255 });
         DrawLineEx({ 830, 320 }, { 1030, 320 }, 4.0f, Color{ 249, 115, 22, 255 });
