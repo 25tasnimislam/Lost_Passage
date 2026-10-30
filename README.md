@@ -139,27 +139,89 @@ After successful compilation, run the generated executable to launch the game.
 **Note:** The compilation command and file paths may need to be adjusted for your local setup. This project was developed in a Windows environment using MSYS2 UCRT64 and Raylib 5.0.
 
 
-## Controls and Input System
+## User Manual
 
-The spaceship control system supports both keyboard and mouse input, allowing for smooth and responsive gameplay. Players can combine both input methods for a more flexible control experience.
+### Keyboard Controls
 
-### Movement and Steering
+| Key | Action |
+|---|---|
+| `W` / `↑` | Move the spaceship upward |
+| `S` / `↓` | Move the spaceship downward |
+| `A` / `←` | Move the spaceship left |
+| `D` / `→` | Move the spaceship right |
+| `Shift` | Activate Boost for faster movement |
+| `Right Mouse Button` | Activate Boost |
+| `E` | Activate Shield |
+| `Middle Mouse Button` | Activate Shield |
+| `Q` / `R` | Activate Nanite Repair |
+| `SPACE` | Deploy flares to counter DEOWAN |
+| `P` | Pause / Resume the game |
+| `ESC` | Pause / Resume the game |
+| `M` | Return to the main menu |
 
-- **W, A, S, D / Arrow Keys:** Apply directional thrust to move the spaceship.
-- **Mouse Movement:** The spaceship smoothly rotates and moves toward the cursor position.
-- **Left Mouse Button (LMB):** Enables cursor-directed spaceship movement.
+### Mouse Controls
 
-Mouse-based movement converts the cursor's screen position into world coordinates to support accurate navigation within the game environment.
+The spaceship can also be controlled using the mouse.
 
-### Sprint and Boost
+- **Move the Mouse** — Steer and move the spaceship according to the mouse position.
+- **Right Mouse Button** — Activate Boost.
+- **Middle Mouse Button** — Activate Shield.
+- **Left Mouse Button** — Used for interacting with menu buttons and selections.
 
-- **Left Shift / Right Mouse Button (RMB):** Hold either input to activate the spaceship's boost.
+### Boost
 
-### Kinetic Shield
+Press `Shift` or hold the **Right Mouse Button** to activate Boost.
 
-- **E / Middle Mouse Button (MMB):** Activate the kinetic shield using either input.
+Boost increases the spaceship's movement speed, but it consumes energy continuously. Use it carefully when escaping hazards or DEOWAN.
 
-### Additional Systems
+### Shield
 
-- **Q:** Activate nanite repair sparks.
-- **Spacebar:** Trigger a Beyond Visual Range (BVR) radar ping.
+Press `E` or hold the **Middle Mouse Button** to activate the Shield.
+
+The Shield reduces incoming damage but continuously consumes energy while active.
+
+### Nanite Repair
+
+Press `Q` or `R` to activate Nanite Repair.
+
+Nanite Repair restores the spaceship's hull integrity while consuming energy.
+
+### Flare System
+
+Press `SPACE` when DEOWAN is pursuing the spaceship.
+
+Flares are used as a defensive countermeasure against DEOWAN. A successful flare hit can stop the pursuit and provides bonus score.
+
+### Pause Menu
+
+Press `P` or `ESC` during gameplay to open the pause menu.
+
+The pause menu provides the following options:
+
+- **Resume** — Continue the current game.
+- **Restart** — Restart the current run.
+- **Settings** — Change BGM and SFX settings.
+- **Home** — Return to the main menu.
+
+### Main Menu and Selection
+
+Use the **Left Mouse Button** to interact with menu buttons.
+
+From the menu, the player can:
+
+1. Start the game.
+2. Select a spaceship.
+3. Select a passage realm.
+4. Select a difficulty level.
+5. Open the settings menu.
+
+### Gameplay Tips
+
+- Manage energy carefully because Boost, Shield, and Repair all consume energy.
+- Use Boost when quick movement is required.
+- Do not keep the Shield active unnecessarily.
+- Use Nanite Repair before the hull becomes critically damaged.
+- Save flares for DEOWAN encounters.
+- Collect Chrono Crystals to increase the remaining time.
+- Collect Hearts to restore hull integrity.
+- Keep moving and avoid hazards throughout the passage.
